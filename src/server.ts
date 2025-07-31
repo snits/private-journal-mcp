@@ -15,8 +15,12 @@ export class PrivateJournalServer {
   private server: Server;
   private journalManager: JournalManager;
   private searchService: SearchService;
+  private defaultModelId: string;
+  private defaultAgentId: string;
 
-  constructor(journalPath: string) {
+  constructor(journalPath: string, config: { defaultModelId?: string; defaultAgentId?: string } = {}) {
+    this.defaultModelId = config.defaultModelId || 'claude-sonnet-4';
+    this.defaultAgentId = config.defaultAgentId || 'claude-general';
     this.journalManager = new JournalManager(journalPath);
     this.searchService = new SearchService(journalPath);
     this.server = new Server(
@@ -197,8 +201,8 @@ export class PrivateJournalServer {
           user_context: typeof args.user_context === 'string' ? args.user_context : undefined,
           technical_insights: typeof args.technical_insights === 'string' ? args.technical_insights : undefined,
           world_knowledge: typeof args.world_knowledge === 'string' ? args.world_knowledge : undefined,
-          agent_id: typeof args.agent_id === 'string' ? args.agent_id : undefined,
-          model_id: typeof args.model_id === 'string' ? args.model_id : undefined,
+          agent_id: typeof args.agent_id === 'string' ? args.agent_id : this.defaultAgentId,
+          model_id: typeof args.model_id === 'string' ? args.model_id : this.defaultModelId,
           visibility_level: typeof args.visibility_level === 'string' ? args.visibility_level as any : 'private',
         };
 
