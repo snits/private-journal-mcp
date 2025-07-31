@@ -5,6 +5,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { EmbeddingService, EmbeddingData } from './embeddings';
 import { resolveUserJournalPath, resolveProjectJournalPath } from './paths';
+import { SearchOptions, VisibilityLevel } from './types';
 
 export interface SearchResult {
   path: string;
@@ -14,9 +15,12 @@ export interface SearchResult {
   timestamp: number;
   excerpt: string;
   type: 'project' | 'user';
+  agent_id?: string;
+  model_id?: string;
+  visibility_level?: VisibilityLevel;
 }
 
-export interface SearchOptions {
+export interface LegacySearchOptions {
   limit?: number;
   minScore?: number;
   sections?: string[];
@@ -41,17 +45,26 @@ export class SearchService {
   async search(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
     const {
       limit = 10,
-      minScore = 0.1,
       sections,
-      dateRange,
+      agent_id,
+      model_id,
+      visibility_level,
+      accessible_to_agent,
       type = 'both'
     } = options;
+    
+    const minScore = 0.1;
 
     // Generate query embedding
     const queryEmbedding = await this.embeddingService.generateEmbedding(query);
 
     // Collect all embeddings
-    const allEmbeddings: Array<EmbeddingData & { type: 'project' | 'user' }> = [];
+    const allEmbeddings: Array<EmbeddingData & { 
+      type: 'project' | 'user';
+      agent_id?: string;
+      model_id?: string;
+      visibility_level?: VisibilityLevel;
+    }> = [];
 
     if (type === 'both' || type === 'project') {
       const projectEmbeddings = await this.loadEmbeddingsFromPath(this.projectPath, 'project');
@@ -65,6 +78,26 @@ export class SearchService {
 
     // Filter by criteria
     const filtered = allEmbeddings.filter(embedding => {
+      // Filter by agent_id if specified
+      if (agent_id && embedding.agent_id !== agent_id) {
+        return false;
+      }
+
+      // Filter by model_id if specified
+      if (model_id && embedding.model_id !== model_id) {
+        return false;
+      }
+
+      // Filter by visibility_level if specified
+      if (visibility_level && embedding.visibility_level !== visibility_level) {
+        return false;
+      }
+
+      // Filter by what's accessible to requesting agent
+      if (accessible_to_agent && !this.isVisibleToAgent(embedding, accessible_to_agent)) {
+        return false;
+      }
+
       // Filter by sections if specified
       if (sections && sections.length > 0) {
         const hasMatchingSection = sections.some(section => 
@@ -73,13 +106,6 @@ export class SearchService {
           )
         );
         if (!hasMatchingSection) return false;
-      }
-
-      // Filter by date range
-      if (dateRange) {
-        const entryDate = new Date(embedding.timestamp);
-        if (dateRange.start && entryDate < dateRange.start) return false;
-        if (dateRange.end && entryDate > dateRange.end) return false;
       }
 
       return true;
@@ -98,7 +124,10 @@ export class SearchService {
           sections: embedding.sections,
           timestamp: embedding.timestamp,
           excerpt,
-          type: embedding.type
+          type: embedding.type,
+          agent_id: embedding.agent_id,
+          model_id: embedding.model_id,
+          visibility_level: embedding.visibility_level
         };
       })
       .filter(result => result.score >= minScore)
@@ -115,7 +144,12 @@ export class SearchService {
       dateRange
     } = options;
 
-    const allEmbeddings: Array<EmbeddingData & { type: 'project' | 'user' }> = [];
+    const allEmbeddings: Array<EmbeddingData & { 
+      type: 'project' | 'user';
+      agent_id?: string;
+      model_id?: string;
+      visibility_level?: VisibilityLevel;
+    }> = [];
 
     if (type === 'both' || type === 'project') {
       const projectEmbeddings = await this.loadEmbeddingsFromPath(this.projectPath, 'project');
@@ -163,38 +197,41 @@ export class SearchService {
     }
   }
 
+  private isVisibleToAgent(embedding: any, requestingAgent: string): boolean {
+    const visibility = embedding.visibility_level || 'private';
+    const embeddingAgent = embedding.agent_id;
+    
+    // Private entries are only visible to the same agent
+    if (visibility === 'private') {
+      return embeddingAgent === requestingAgent;
+    }
+    
+    // Public entries are visible to everyone
+    if (visibility === 'public') {
+      return true;
+    }
+    
+    // Team entries are visible to all agents (for now - could be refined)
+    if (visibility === 'team') {
+      return true;
+    }
+    
+    // CRB entries are visible to all agents (Change Review Board)
+    if (visibility === 'crb') {
+      return true;
+    }
+    
+    return false;
+  }
+
   private async loadEmbeddingsFromPath(
     basePath: string, 
     type: 'project' | 'user'
-  ): Promise<Array<EmbeddingData & { type: 'project' | 'user' }>> {
-    const embeddings: Array<EmbeddingData & { type: 'project' | 'user' }> = [];
+  ): Promise<Array<EmbeddingData & { type: 'project' | 'user'; agent_id?: string; model_id?: string; visibility_level?: VisibilityLevel }>> {
+    const embeddings: Array<EmbeddingData & { type: 'project' | 'user'; agent_id?: string; model_id?: string; visibility_level?: VisibilityLevel }> = [];
 
     try {
-      const dayDirs = await fs.readdir(basePath);
-      
-      for (const dayDir of dayDirs) {
-        const dayPath = path.join(basePath, dayDir);
-        const stat = await fs.stat(dayPath);
-        
-        if (!stat.isDirectory() || !dayDir.match(/^\d{4}-\d{2}-\d{2}$/)) {
-          continue;
-        }
-
-        const files = await fs.readdir(dayPath);
-        const embeddingFiles = files.filter(file => file.endsWith('.embedding'));
-
-        for (const embeddingFile of embeddingFiles) {
-          try {
-            const embeddingPath = path.join(dayPath, embeddingFile);
-            const content = await fs.readFile(embeddingPath, 'utf8');
-            const embeddingData = JSON.parse(content);
-            embeddings.push({ ...embeddingData, type });
-          } catch (error) {
-            console.error(`Failed to load embedding ${embeddingFile}:`, error);
-            // Continue with other files
-          }
-        }
-      }
+      await this.loadEmbeddingsRecursive(basePath, type, embeddings);
     } catch (error) {
       if ((error as any)?.code !== 'ENOENT') {
         console.error(`Failed to read embeddings from ${basePath}:`, error);
@@ -203,6 +240,109 @@ export class SearchService {
     }
 
     return embeddings;
+  }
+
+  private async loadEmbeddingsRecursive(
+    currentPath: string,
+    type: 'project' | 'user',
+    embeddings: Array<EmbeddingData & { type: 'project' | 'user'; agent_id?: string; model_id?: string; visibility_level?: VisibilityLevel }>,
+    pathComponents: string[] = []
+  ): Promise<void> {
+    try {
+      const items = await fs.readdir(currentPath);
+      
+      for (const item of items) {
+        const itemPath = path.join(currentPath, item);
+        const stat = await fs.stat(itemPath);
+        
+        if (stat.isDirectory()) {
+          // Check if this is a date directory (final level)
+          if (item.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            // This is a date directory, load embeddings from here
+            await this.loadEmbeddingsFromDateDir(itemPath, type, embeddings, pathComponents);
+          } else {
+            // This might be model_id, agent_id, or visibility_level directory
+            await this.loadEmbeddingsRecursive(itemPath, type, embeddings, [...pathComponents, item]);
+          }
+        }
+      }
+    } catch (error) {
+      // Skip directories that can't be read
+    }
+  }
+
+  private async loadEmbeddingsFromDateDir(
+    dateDirPath: string,
+    type: 'project' | 'user',
+    embeddings: Array<EmbeddingData & { type: 'project' | 'user'; agent_id?: string; model_id?: string; visibility_level?: VisibilityLevel }>,
+    pathComponents: string[]
+  ): Promise<void> {
+    try {
+      const files = await fs.readdir(dateDirPath);
+      const embeddingFiles = files.filter(file => file.endsWith('.embedding'));
+
+      for (const embeddingFile of embeddingFiles) {
+        try {
+          const embeddingPath = path.join(dateDirPath, embeddingFile);
+          const content = await fs.readFile(embeddingPath, 'utf8');
+          const embeddingData = JSON.parse(content);
+          
+          // Extract agent metadata from path components or embedding data
+          const { model_id, agent_id, visibility_level } = this.extractAgentMetadata(pathComponents, embeddingData);
+          
+          embeddings.push({ 
+            ...embeddingData, 
+            type,
+            model_id,
+            agent_id,
+            visibility_level
+          });
+        } catch (error) {
+          console.error(`Failed to load embedding ${embeddingFile}:`, error);
+          // Continue with other files
+        }
+      }
+    } catch (error) {
+      console.error(`Failed to read date directory ${dateDirPath}:`, error);
+    }
+  }
+
+  private extractAgentMetadata(pathComponents: string[], embeddingData: any): {
+    model_id?: string;
+    agent_id?: string;
+    visibility_level?: VisibilityLevel;
+  } {
+    // Try path-based extraction first (for new structure)
+    if (pathComponents.length >= 3) {
+      return {
+        model_id: pathComponents[0],
+        agent_id: pathComponents[1],
+        visibility_level: pathComponents[2] as VisibilityLevel
+      };
+    }
+    
+    // Fall back to trying to extract from file path metadata (if available)
+    if (embeddingData.path) {
+      const pathParts = embeddingData.path.split(path.sep);
+      const modelIndex = pathParts.findIndex((part: string) => 
+        part.includes('claude') || part.includes('gpt') || part.includes('gemini')
+      );
+      
+      if (modelIndex >= 0 && modelIndex + 2 < pathParts.length) {
+        return {
+          model_id: pathParts[modelIndex],
+          agent_id: pathParts[modelIndex + 1],
+          visibility_level: pathParts[modelIndex + 2] as VisibilityLevel
+        };
+      }
+    }
+    
+    // Default values for legacy entries
+    return {
+      model_id: 'unknown',
+      agent_id: 'unknown',
+      visibility_level: 'private'
+    };
   }
 
   private generateExcerpt(text: string, query: string, maxLength: number = 200): string {

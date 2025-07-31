@@ -39,4 +39,8 @@ export interface SearchOptions {
   model_id?: string;
   visibility_level?: VisibilityLevel;
   accessible_to_agent?: string;  // Filter by what this agent can see
+  dateRange?: {
+    start?: Date;
+    end?: Date;
+  };
 }
