@@ -3,7 +3,7 @@
 
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { JournalEntry } from './types';
+import { JournalEntry, VisibilityLevel } from './types';
 import { resolveUserJournalPath } from './paths';
 import { EmbeddingService, EmbeddingData } from './embeddings';
 
@@ -42,16 +42,27 @@ export class JournalManager {
     user_context?: string;
     technical_insights?: string;
     world_knowledge?: string;
+    agent_id?: string;
+    model_id?: string;
+    visibility_level?: VisibilityLevel;
   }): Promise<void> {
     const timestamp = new Date();
     
-    // Split thoughts into project-local and user-global
-    const projectThoughts = { project_notes: thoughts.project_notes };
+    // Split thoughts into project-local and user-global, preserving agent metadata
+    const projectThoughts = { 
+      project_notes: thoughts.project_notes,
+      agent_id: thoughts.agent_id,
+      model_id: thoughts.model_id,
+      visibility_level: thoughts.visibility_level || 'private'
+    };
     const userThoughts = {
       feelings: thoughts.feelings,
       user_context: thoughts.user_context,
       technical_insights: thoughts.technical_insights,
-      world_knowledge: thoughts.world_knowledge
+      world_knowledge: thoughts.world_knowledge,
+      agent_id: thoughts.agent_id,
+      model_id: thoughts.model_id,
+      visibility_level: thoughts.visibility_level || 'private'
     };
     
     // Write project notes to project directory
@@ -60,7 +71,7 @@ export class JournalManager {
     }
     
     // Write user thoughts to user directory
-    const hasUserContent = Object.values(userThoughts).some(value => value !== undefined);
+    const hasUserContent = Object.values(userThoughts).some(value => value !== undefined && typeof value === 'string');
     if (hasUserContent) {
       await this.writeThoughtsToLocation(userThoughts, timestamp, this.userJournalPath);
     }
@@ -111,6 +122,9 @@ ${content}
       user_context?: string;
       technical_insights?: string;
       world_knowledge?: string;
+      agent_id?: string;
+      model_id?: string;
+      visibility_level?: VisibilityLevel;
     },
     timestamp: Date,
     basePath: string
@@ -118,7 +132,9 @@ ${content}
     const dateString = this.formatDate(timestamp);
     const timeString = this.formatTimestamp(timestamp);
     
-    const dayDirectory = path.join(basePath, dateString);
+    // Use agent-aware path structure
+    const agentBasePath = this.getAgentBasePath(basePath, thoughts.agent_id, thoughts.model_id, thoughts.visibility_level);
+    const dayDirectory = path.join(agentBasePath, dateString);
     const fileName = `${timeString}.md`;
     const filePath = path.join(dayDirectory, fileName);
 
@@ -137,6 +153,9 @@ ${content}
     user_context?: string;
     technical_insights?: string;
     world_knowledge?: string;
+    agent_id?: string;
+    model_id?: string;
+    visibility_level?: VisibilityLevel;
   }, timestamp: Date): string {
     const timeDisplay = timestamp.toLocaleTimeString('en-US', { 
       hour12: true, 
@@ -176,6 +195,9 @@ ${content}
 title: "${timeDisplay} - ${dateDisplay}"
 date: ${timestamp.toISOString()}
 timestamp: ${timestamp.getTime()}
+agent_id: ${thoughts.agent_id || 'unknown'}
+model_id: ${thoughts.model_id || 'unknown'}
+visibility_level: ${thoughts.visibility_level || 'private'}
 ---
 
 ${sections.join('\n\n')}
@@ -284,5 +306,34 @@ ${sections.join('\n\n')}
         throw new Error(`Failed to create journal directory at ${dirPath}: ${mkdirError instanceof Error ? mkdirError.message : mkdirError}`);
       }
     }
+  }
+
+  private getAgentBasePath(
+    basePath: string, 
+    agent_id?: string, 
+    model_id?: string, 
+    visibility_level?: VisibilityLevel
+  ): string {
+    // For backward compatibility, if no agent/model specified, use original path
+    if (!agent_id && !model_id) {
+      return basePath;
+    }
+
+    // Build path: basePath/model_id/agent_id/visibility_level
+    const pathParts = [basePath];
+    
+    if (model_id) {
+      pathParts.push(model_id);
+    }
+    
+    if (agent_id) {
+      pathParts.push(agent_id);
+    }
+    
+    if (visibility_level) {
+      pathParts.push(visibility_level);
+    }
+    
+    return path.join(...pathParts);
   }
 }

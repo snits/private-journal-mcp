@@ -58,6 +58,20 @@ export class PrivateJournalServer {
                 type: 'string',
                 description: "Your PRIVATE LEARNING JOURNAL for everything else that's interesting or useful. Domain knowledge, surprising facts, connections between ideas, insights about how systems work, or anything that expands your understanding of the world. Capture it while it's vivid. Nobody but you will ever see this.",
               },
+              agent_id: {
+                type: 'string',
+                description: "Your agent identity (e.g., 'code-reviewer', 'debug-specialist', 'claude-general'). Used for multi-agent journal organization.",
+              },
+              model_id: {
+                type: 'string',
+                description: "Your model identity (e.g., 'claude-sonnet-4', 'gpt-4o', 'gemini-2.0-pro'). Used for multi-model journal organization.",
+              },
+              visibility_level: {
+                type: 'string',
+                enum: ['private', 'public', 'team', 'crb'],
+                description: "Entry visibility level: 'private' (only you), 'public' (shared insights), 'team' (implementation team), 'crb' (Change Review Board)",
+                default: 'private',
+              },
             },
             required: [],
           },
@@ -87,6 +101,23 @@ export class PrivateJournalServer {
                 type: 'array',
                 items: { type: 'string' },
                 description: "Filter by section types (e.g., ['feelings', 'technical_insights'])",
+              },
+              agent_id: {
+                type: 'string',
+                description: "Filter by specific agent identity",
+              },
+              model_id: {
+                type: 'string',
+                description: "Filter by specific model identity",
+              },
+              visibility_level: {
+                type: 'string',
+                enum: ['private', 'public', 'team', 'crb'],
+                description: "Filter by visibility level",
+              },
+              accessible_to_agent: {
+                type: 'string',
+                description: "Show only entries accessible to this agent (considers visibility rules)",
               },
             },
             required: ['query'],
@@ -166,6 +197,9 @@ export class PrivateJournalServer {
           user_context: typeof args.user_context === 'string' ? args.user_context : undefined,
           technical_insights: typeof args.technical_insights === 'string' ? args.technical_insights : undefined,
           world_knowledge: typeof args.world_knowledge === 'string' ? args.world_knowledge : undefined,
+          agent_id: typeof args.agent_id === 'string' ? args.agent_id : undefined,
+          model_id: typeof args.model_id === 'string' ? args.model_id : undefined,
+          visibility_level: typeof args.visibility_level === 'string' ? args.visibility_level as any : 'private',
         };
 
         const hasAnyContent = Object.values(thoughts).some(value => value !== undefined);
@@ -198,6 +232,10 @@ export class PrivateJournalServer {
           limit: typeof args.limit === 'number' ? args.limit : 10,
           type: typeof args.type === 'string' ? args.type as 'project' | 'user' | 'both' : 'both',
           sections: Array.isArray(args.sections) ? args.sections.filter(s => typeof s === 'string') : undefined,
+          agent_id: typeof args.agent_id === 'string' ? args.agent_id : undefined,
+          model_id: typeof args.model_id === 'string' ? args.model_id : undefined,
+          visibility_level: typeof args.visibility_level === 'string' ? args.visibility_level as any : undefined,
+          accessible_to_agent: typeof args.accessible_to_agent === 'string' ? args.accessible_to_agent : undefined,
         };
 
         try {

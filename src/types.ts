@@ -1,10 +1,15 @@
 // ABOUTME: Type definitions for the private journal MCP server
 // ABOUTME: Defines interfaces for journal entries and configuration
 
+export type VisibilityLevel = 'private' | 'public' | 'team' | 'crb';
+
 export interface JournalEntry {
   content: string;
   timestamp: Date;
   filePath: string;
+  agent_id?: string;        // e.g., "code-reviewer", "debug-specialist", "claude-general"
+  model_id?: string;        // e.g., "claude-sonnet-4", "gpt-4o", "gemini-2.0-pro"
+  visibility_level?: VisibilityLevel;
 }
 
 export interface ServerConfig {
@@ -21,4 +26,17 @@ export interface ProcessThoughtsRequest {
   user_context?: string;
   technical_insights?: string;
   world_knowledge?: string;
+  agent_id?: string;
+  model_id?: string;
+  visibility_level?: VisibilityLevel;
+}
+
+export interface SearchOptions {
+  limit?: number;
+  type?: 'project' | 'user' | 'both';
+  sections?: string[];
+  agent_id?: string;
+  model_id?: string;
+  visibility_level?: VisibilityLevel;
+  accessible_to_agent?: string;  // Filter by what this agent can see
 }
