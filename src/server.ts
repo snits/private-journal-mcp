@@ -7,13 +7,13 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { JournalManager } from './journal';
+import { DatabaseJournalManager } from './database-journal';
 import { ProcessFeelingsRequest, ProcessThoughtsRequest } from './types';
 import { SearchService } from './search';
 
 export class PrivateJournalServer {
   private server: Server;
-  private journalManager: JournalManager;
+  private journalManager: DatabaseJournalManager;
   private searchService: SearchService;
   private defaultModelId: string;
   private defaultAgentId: string;
@@ -21,7 +21,7 @@ export class PrivateJournalServer {
   constructor(journalPath: string, config: { defaultModelId?: string; defaultAgentId?: string } = {}) {
     this.defaultModelId = config.defaultModelId || 'claude-sonnet-4';
     this.defaultAgentId = config.defaultAgentId || 'claude-general';
-    this.journalManager = new JournalManager(journalPath);
+    this.journalManager = new DatabaseJournalManager(journalPath);
     this.searchService = new SearchService(journalPath);
     this.server = new Server(
       {
@@ -331,16 +331,12 @@ export class PrivateJournalServer {
   }
 
   async run(): Promise<void> {
-    // Generate missing embeddings on startup
+    // Initialize database connection
     try {
-      console.error('Checking for missing embeddings...');
-      const count = await this.journalManager.generateMissingEmbeddings();
-      if (count > 0) {
-        console.error(`Generated embeddings for ${count} existing journal entries.`);
-      }
+      await this.journalManager.initialize();
     } catch (error) {
-      console.error('Failed to generate missing embeddings on startup:', error);
-      // Don't fail startup if embedding generation fails
+      console.error('Failed to initialize database:', error);
+      throw error;
     }
 
     const transport = new StdioServerTransport();
