@@ -561,6 +561,16 @@ ${sections.join('\n\n')}
     }));
   }
 
+  async readEntryByPath(filePath: string): Promise<string | null> {
+    const row = await this.getAsync(`
+      SELECT content FROM journal_entries 
+      WHERE file_path = ?
+      LIMIT 1
+    `, [filePath]);
+    
+    return row ? row.content : null;
+  }
+
   // Test helper methods
   async getTableInfo(tableName: string): Promise<any[]> {
     return this.allAsync(`PRAGMA table_info(${tableName})`);

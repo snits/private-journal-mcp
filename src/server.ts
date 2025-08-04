@@ -271,7 +271,7 @@ export class PrivateJournalServer {
         }
 
         try {
-          const content = await this.searchService.readEntry(args.path);
+          const content = await this.journalManager.readEntryByPath(args.path);
           if (content === null) {
             throw new Error('Entry not found');
           }
