@@ -24,6 +24,7 @@ export interface MigrationResult {
   success: boolean;
   migratedCount: number;
   failedCount: number;
+  skippedCount: number;
   warningCount: number;
   totalProcessed: number;
   duration: number;
@@ -217,6 +218,7 @@ export class MigrationService {
     const startTime = Date.now();
     let migratedCount = 0;
     let failedCount = 0;
+    let skippedCount = 0;
     let warningCount = 0;
     const warnings: string[] = [];
     const errors: string[] = [];
@@ -227,8 +229,12 @@ export class MigrationService {
       
       for (const entry of batch) {
         try {
-          await this.migrateEntry(entry, warnings);
-          migratedCount++;
+          const result = await this.migrateEntry(entry, warnings);
+          if (result === 'migrated') {
+            migratedCount++;
+          } else if (result === 'skipped') {
+            skippedCount++;
+          }
         } catch (error) {
           failedCount++;
           const errorMsg = `Failed to migrate ${entry.filePath}: ${error instanceof Error ? error.message : error}`;
@@ -242,7 +248,7 @@ export class MigrationService {
         
         // Report progress
         if (onProgress) {
-          onProgress(migratedCount + failedCount, entries.length);
+          onProgress(migratedCount + failedCount + skippedCount, entries.length);
         }
       }
     }
@@ -254,34 +260,25 @@ export class MigrationService {
       success: failedCount === 0,
       migratedCount,
       failedCount,
+      skippedCount,
       warningCount,
-      totalProcessed: migratedCount + failedCount,
+      totalProcessed: migratedCount + failedCount + skippedCount,
       duration,
       warnings,
       errors
     };
   }
 
-  private async migrateEntry(entry: DiscoveredEntry, warnings: string[]): Promise<void> {
+  private async migrateEntry(entry: DiscoveredEntry, warnings: string[]): Promise<'migrated' | 'skipped'> {
     // Read the markdown content
     const content = await fs.readFile(entry.filePath, 'utf8');
     
-    // Try to read existing embedding
-    let existingEmbedding: EmbeddingData | null = null;
-    try {
-      const embeddingContent = await fs.readFile(entry.embeddingPath, 'utf8');
-      existingEmbedding = JSON.parse(embeddingContent);
-    } catch (error) {
-      warnings.push(`Missing embedding file for ${entry.filePath}`);
-    }
-
-    // Parse frontmatter to extract metadata
+    // Parse frontmatter first to get accurate timestamp
     const frontmatterMatch = content.match(/^---\n(.*?)\n---\n/s);
     let parsedMetadata: any = {};
     
     if (frontmatterMatch) {
       try {
-        // Simple YAML parsing for our known structure
         const frontmatter = frontmatterMatch[1];
         const lines = frontmatter.split('\n');
         
@@ -302,16 +299,36 @@ export class MigrationService {
         warnings.push(`Failed to parse frontmatter for ${entry.filePath}`);
       }
     }
+    
+    // Determine timestamp and file path early for duplicate checking
+    const timestamp = entry.metadata.timestamp || new Date(parsedMetadata.timestamp || Date.now());
+    const dateString = entry.metadata.dateString || this.formatDate(timestamp);
+    const timeString = this.formatTimestamp(timestamp);
+    const filePath = `${entry.type}/${dateString}/${timeString}.md`;
+    
+    // Check if entry already exists
+    const exists = await (this.dbManager as any).checkEntryExists(filePath, timestamp.getTime(), content);
+    if (exists) {
+      warnings.push(`Skipping duplicate entry: ${entry.filePath}`);
+      return 'skipped';
+    }
+    
+    // Try to read existing embedding
+    let existingEmbedding: EmbeddingData | null = null;
+    try {
+      const embeddingContent = await fs.readFile(entry.embeddingPath, 'utf8');
+      existingEmbedding = JSON.parse(embeddingContent);
+    } catch (error) {
+      warnings.push(`Missing embedding file for ${entry.filePath}`);
+    }
+
+    // Frontmatter already parsed above for timestamp accuracy
 
     // Determine entry type based on content structure
     const entryType = content.includes('## Feelings') || content.includes('## Project Notes') 
       ? 'thoughts' : 'simple';
 
-    // Use database manager to store the entry
-    const timestamp = entry.metadata.timestamp || new Date(parsedMetadata.timestamp || Date.now());
-    const dateString = entry.metadata.dateString || this.formatDate(timestamp);
-    const timeString = this.formatTimestamp(timestamp);
-    const filePath = `${entry.type}/${dateString}/${timeString}.md`;
+    // Use timestamp and filePath calculated earlier for consistency
 
     // Generate embedding if not available
     let embeddingData: EmbeddingData;
@@ -340,9 +357,9 @@ export class MigrationService {
       }
     }
 
-    // Insert into database using direct SQL to maintain compatibility
+    // Insert into database using INSERT OR IGNORE to handle any remaining edge cases
     await (this.dbManager as any).runAsync(`
-      INSERT INTO journal_entries (
+      INSERT OR IGNORE INTO journal_entries (
         content, timestamp, date_string, file_path, entry_type,
         agent_id, model_id, visibility_level,
         embedding, searchable_text, sections
@@ -360,6 +377,8 @@ export class MigrationService {
       embeddingData.text,
       JSON.stringify(embeddingData.sections)
     ]);
+    
+    return 'migrated';
   }
 
   private formatDate(date: Date): string {

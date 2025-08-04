@@ -225,6 +225,7 @@ async function main(): Promise<void> {
     console.log('===================');
     console.log(`📊 Total processed: ${result.totalProcessed}`);
     console.log(`✅ Successfully migrated: ${result.migratedCount}`);
+    console.log(`⏭️  Skipped (duplicates): ${result.skippedCount}`);
     console.log(`❌ Failed: ${result.failedCount}`);
     console.log(`⚠️  Warnings: ${result.warningCount}`);
     console.log(`⏱️  Duration: ${(result.duration / 1000).toFixed(1)}s`);

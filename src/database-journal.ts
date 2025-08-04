@@ -118,12 +118,26 @@ export class DatabaseJournalManager {
       'CREATE INDEX IF NOT EXISTS idx_journal_entries_timestamp ON journal_entries(timestamp)',
       'CREATE INDEX IF NOT EXISTS idx_journal_entries_agent_id ON journal_entries(agent_id)',
       'CREATE INDEX IF NOT EXISTS idx_journal_entries_visibility ON journal_entries(visibility_level)',
-      'CREATE INDEX IF NOT EXISTS idx_journal_entries_date_string ON journal_entries(date_string)'
+      'CREATE INDEX IF NOT EXISTS idx_journal_entries_date_string ON journal_entries(date_string)',
+      'CREATE INDEX IF NOT EXISTS idx_journal_entries_file_path ON journal_entries(file_path)'
     ];
 
     for (const indexSQL of indexes) {
       await this.runAsync(indexSQL);
     }
+  }
+
+  async checkEntryExists(filePath: string, timestamp: number, contentPreview: string): Promise<boolean> {
+    // Check for duplicates based on timestamp and content similarity (more robust than file path)
+    // Allow for slight timestamp variations (within 1 minute = 60000ms)
+    const timeWindow = 60000;
+    const existing = await this.getAsync(`
+      SELECT id FROM journal_entries 
+      WHERE ABS(timestamp - ?) <= ? AND substr(content, 1, 200) = substr(?, 1, 200)
+      LIMIT 1
+    `, [timestamp, timeWindow, contentPreview]);
+    
+    return existing !== undefined;
   }
 
   async writeEntry(content: string): Promise<void> {

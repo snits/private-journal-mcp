@@ -243,17 +243,17 @@ export class PrivateJournalServer {
         };
 
         try {
-          const results = await this.searchService.search(args.query, options);
+          const results = await this.journalManager.searchBySimilarity(args.query, options);
           return {
             content: [
               {
                 type: 'text',
                 text: results.length > 0 
                   ? `Found ${results.length} relevant entries:\n\n${results.map((result, i) => 
-                      `${i + 1}. [Score: ${result.score.toFixed(3)}] ${new Date(result.timestamp).toLocaleDateString()} (${result.type})\n` +
+                      `${i + 1}. [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} (${result.entry_type})\n` +
                       `   Sections: ${result.sections.join(', ')}\n` +
-                      `   Path: ${result.path}\n` +
-                      `   Excerpt: ${result.excerpt}\n`
+                      `   Path: ${result.file_path}\n` +
+                      `   Excerpt: ${result.searchable_text?.slice(0, 200)}...\n`
                     ).join('\n')}`
                   : 'No relevant entries found.',
               },
@@ -304,17 +304,17 @@ export class PrivateJournalServer {
         };
 
         try {
-          const results = await this.searchService.listRecent(options);
+          const results = await this.journalManager.listRecent(options);
           return {
             content: [
               {
                 type: 'text',
                 text: results.length > 0 
                   ? `Recent entries (last ${days} days):\n\n${results.map((result, i) => 
-                      `${i + 1}. ${new Date(result.timestamp).toLocaleDateString()} (${result.type})\n` +
+                      `${i + 1}. ${result.timestamp.toLocaleDateString()} (${result.entry_type})\n` +
                       `   Sections: ${result.sections.join(', ')}\n` +
-                      `   Path: ${result.path}\n` +
-                      `   Excerpt: ${result.excerpt}\n`
+                      `   Path: ${result.file_path}\n` +
+                      `   Excerpt: ${result.searchable_text?.slice(0, 200)}...\n`
                     ).join('\n')}`
                   : `No entries found in the last ${days} days.`,
               },
