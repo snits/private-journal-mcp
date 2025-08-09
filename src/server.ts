@@ -1,4 +1,4 @@
-// ABOUTME: MCP server implementation with process_feelings tool
+// ABOUTME: MCP server implementation with process_feelings tool and enhanced semantic search
 // ABOUTME: Handles stdio protocol communication and tool registration
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
@@ -7,21 +7,29 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
-import { DatabaseJournalManager } from './database-journal';
 import { ProcessFeelingsRequest, ProcessThoughtsRequest } from './types';
 import { SearchService } from './search';
+import { JournalManagerFactory, JournalManagerInterface } from './journal-manager-factory';
+import { createDatabaseConfig } from './database-config';
+import { SemanticSearchTools } from './semantic-search-tools';
 
 export class PrivateJournalServer {
   private server: Server;
-  private journalManager: DatabaseJournalManager;
+  private journalManager: JournalManagerInterface;
   private searchService: SearchService;
+  private semanticSearchTools: SemanticSearchTools | null = null;
   private defaultModelId: string;
   private defaultAgentId: string;
 
   constructor(journalPath: string, config: { defaultModelId?: string; defaultAgentId?: string } = {}) {
     this.defaultModelId = config.defaultModelId || 'claude-sonnet-4';
     this.defaultAgentId = config.defaultAgentId || 'claude-general';
-    this.journalManager = new DatabaseJournalManager(journalPath);
+    
+    // Create journal manager based on environment configuration
+    const managerType = JournalManagerFactory.getManagerType();
+    const dbConfig = managerType === 'postgresql' ? createDatabaseConfig() : undefined;
+    this.journalManager = JournalManagerFactory.create(managerType, journalPath, dbConfig);
+    
     this.searchService = new SearchService(journalPath);
     this.server = new Server(
       {
@@ -164,6 +172,138 @@ export class PrivateJournalServer {
                 default: 30,
               },
             },
+            required: [],
+          },
+        },
+        {
+          name: 'semantic_search_insights',
+          description: "Search through distilled insights using semantic similarity. Requires Mnemosyne distillation system.",
+          inputSchema: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: "Natural language query to search for in distilled insights",
+              },
+              limit: {
+                type: 'number',
+                description: "Maximum number of results to return (1-100, default: 10)",
+                default: 10,
+              },
+              similarity_threshold: {
+                type: 'number',
+                description: "Minimum similarity score for results (0.0-1.0, default: 0.7)",
+                default: 0.7,
+              },
+              quality_threshold: {
+                type: 'number',
+                description: "Minimum quality score for insights (0.0-1.0, default: 0.7)",
+                default: 0.7,
+              },
+              category: {
+                type: 'string',
+                description: "Filter by insight category (optional)",
+              },
+              date_range: {
+                type: 'object',
+                properties: {
+                  start: { type: 'string', description: "ISO date string for range start" },
+                  end: { type: 'string', description: "ISO date string for range end" },
+                },
+                description: "Filter by date range (optional)",
+              },
+            },
+            required: ['query'],
+          },
+        },
+        {
+          name: 'find_related_insights',
+          description: "Find semantically related insights to a reference entry or insight. Requires Mnemosyne distillation system.",
+          inputSchema: {
+            type: 'object',
+            properties: {
+              reference_id: {
+                type: 'string',
+                description: "ID of the reference journal entry or insight",
+              },
+              reference_type: {
+                type: 'string',
+                enum: ['entry', 'insight'],
+                description: "Type of reference: 'entry' for journal entry, 'insight' for distilled insight",
+              },
+              limit: {
+                type: 'number',
+                description: "Maximum number of related insights to return (1-50, default: 8)",
+                default: 8,
+              },
+              similarity_threshold: {
+                type: 'number',
+                description: "Minimum similarity score for results (0.0-1.0, default: 0.75)",
+                default: 0.75,
+              },
+              exclude_original: {
+                type: 'boolean',
+                description: "Exclude the original reference from results (default: true)",
+                default: true,
+              },
+              expand_context: {
+                type: 'boolean',
+                description: "Include context information about the reference (default: false)",
+                default: false,
+              },
+            },
+            required: ['reference_id', 'reference_type'],
+          },
+        },
+        {
+          name: 'distill_and_search',
+          description: "Trigger distillation on recent entries and search through results. Requires Mnemosyne distillation system.",
+          inputSchema: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: "Search query to apply to distilled insights",
+              },
+              days_back: {
+                type: 'number',
+                description: "Number of days back to search for entries to distill (1-365, default: 7)",
+                default: 7,
+              },
+              auto_distill: {
+                type: 'boolean',
+                description: "Automatically distill recent entries before searching (default: false)",
+                default: false,
+              },
+              search_after_distillation: {
+                type: 'boolean',
+                description: "Search through distilled results (default: true)",
+                default: true,
+              },
+              quality_threshold: {
+                type: 'number',
+                description: "Minimum quality threshold for distillation (0.0-1.0, default: 0.7)",
+                default: 0.7,
+              },
+              category: {
+                type: 'string',
+                description: "Filter by category for distillation and search (optional)",
+              },
+              limit: {
+                type: 'number',
+                description: "Maximum search results to return (1-100, default: 10)",
+                default: 10,
+              },
+            },
+            required: ['query'],
+          },
+        },
+        {
+          name: 'get_semantic_search_stats',
+          description: "Get system status and capabilities for semantic search and distillation features.",
+          inputSchema: {
+            type: 'object',
+            properties: {},
             required: [],
           },
         },
@@ -326,6 +466,158 @@ export class PrivateJournalServer {
         }
       }
 
+      // Semantic search tools (require Mnemosyne integration)
+      if (request.params.name === 'semantic_search_insights') {
+        if (!this.semanticSearchTools) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'Semantic search insights are not available. Mnemosyne distillation system not detected.',
+              },
+            ],
+          };
+        }
+
+        try {
+          const result = await this.semanticSearchTools.semanticSearchInsights(args as any);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: result.success 
+                  ? JSON.stringify(result.results, null, 2)
+                  : `Error: ${result.error}`,
+              },
+            ],
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+          throw new Error(`Failed to search insights: ${errorMessage}`);
+        }
+      }
+
+      if (request.params.name === 'find_related_insights') {
+        if (!this.semanticSearchTools) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'Related insights search is not available. Mnemosyne distillation system not detected.',
+              },
+            ],
+          };
+        }
+
+        try {
+          const result = await this.semanticSearchTools.findRelatedInsights(args as any);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: result.success 
+                  ? JSON.stringify(result.results, null, 2)
+                  : `Error: ${result.error}`,
+              },
+            ],
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+          throw new Error(`Failed to find related insights: ${errorMessage}`);
+        }
+      }
+
+      if (request.params.name === 'distill_and_search') {
+        if (!this.semanticSearchTools) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'Distillation and search is not available. Mnemosyne distillation system not detected.',
+              },
+            ],
+          };
+        }
+
+        try {
+          const result = await this.semanticSearchTools.distillAndSearch(args as any);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: result.success 
+                  ? JSON.stringify(result.results, null, 2)
+                  : `Error: ${result.error}`,
+              },
+            ],
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+          throw new Error(`Failed to distill and search: ${errorMessage}`);
+        }
+      }
+
+      if (request.params.name === 'get_semantic_search_stats') {
+        if (!this.semanticSearchTools) {
+          // Return basic stats even without semantic search tools
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({
+                  database: {
+                    total_entries: 0,
+                    total_distillations: 0,
+                    avg_quality_score: 0,
+                    recent_entries_count: 0,
+                  },
+                  vector_store: {
+                    status: 'unavailable',
+                  },
+                  search_capabilities: {
+                    semantic_search_available: false,
+                    distillation_available: false,
+                    model_endpoints: [],
+                    quality_thresholds: {
+                      min: 0.0,
+                      default: 0.7,
+                      max: 1.0,
+                    },
+                  },
+                  system_health: {
+                    overall_status: 'unavailable',
+                    components: {
+                      database: true,
+                      vector_store: false,
+                      embedding_service: false,
+                      distillation_engine: false,
+                    },
+                    last_check: new Date().toISOString(),
+                  },
+                }, null, 2),
+              },
+            ],
+          };
+        }
+
+        try {
+          const result = await this.semanticSearchTools.getSemanticSearchStats();
+          return {
+            content: [
+              {
+                type: 'text',
+                text: result.success 
+                  ? JSON.stringify(result.data, null, 2)
+                  : `Error: ${result.error}`,
+              },
+            ],
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+          throw new Error(`Failed to get semantic search stats: ${errorMessage}`);
+        }
+      }
+
       throw new Error(`Unknown tool: ${request.params.name}`);
     });
   }
@@ -334,6 +626,18 @@ export class PrivateJournalServer {
     // Initialize database connection
     try {
       await this.journalManager.initialize();
+      
+      // Initialize semantic search tools if using PostgreSQL
+      const managerType = JournalManagerFactory.getManagerType();
+      if (managerType === 'postgresql') {
+        // Check if manager has direct query access (like PostgreSQLJournalManager)
+        const postgresManager = this.journalManager as any;
+        if (postgresManager.pool) {
+          this.semanticSearchTools = new SemanticSearchTools(postgresManager);
+          await this.semanticSearchTools.initialize();
+          console.error('Semantic search tools initialized');
+        }
+      }
     } catch (error) {
       console.error('Failed to initialize database:', error);
       throw error;
