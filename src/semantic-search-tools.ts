@@ -153,6 +153,63 @@ export interface SemanticSearchStatsResponse {
   error?: string;
 }
 
+// =====================================================
+// CHUNK SEARCH INTERFACES
+// =====================================================
+
+export interface ChunkSearchRequest {
+  query: string;
+  limit?: number;
+  expand_chunks?: boolean;
+}
+
+export interface SemanticChunk {
+  chunk_id: string;
+  summary: string;
+  member_count: number;
+  member_ids: string[];
+  agents: string[];
+  date_range: string;
+  similarity_score: number;
+}
+
+export interface ChunkSearchResponse {
+  success: boolean;
+  results?: {
+    chunks: SemanticChunk[];
+    expanded_entries?: any[];
+    metadata: {
+      total_chunks: number;
+      avg_similarity_score: number;
+      search_duration_ms: number;
+      compression_ratio: string;
+    };
+  };
+  error?: string;
+}
+
+// =====================================================
+// CHUNK EXPANSION INTERFACES
+// =====================================================
+
+export interface ChunkExpansionRequest {
+  chunk_id: string;
+}
+
+export interface ChunkExpansionResponse {
+  success: boolean;
+  results?: {
+    chunk_info: SemanticChunk;
+    entries: any[];
+    metadata: {
+      chunk_id: string;
+      entry_count: number;
+      expansion_duration_ms: number;
+    };
+  };
+  error?: string;
+}
+
 /**
  * Semantic Search Tools Integration
  * 
@@ -762,5 +819,251 @@ export class SemanticSearchTools {
       timestamp: row.created_at.toISOString(),
       tags: row.tags,
     };
+  }
+
+  /**
+   * MCP Tool: mcp__semantic_search_chunks
+   * Searches semantic chunks for faster topic-level discovery
+   */
+  async semanticSearchChunks(request: ChunkSearchRequest): Promise<ChunkSearchResponse> {
+    const startTime = Date.now();
+
+    try {
+      if (!this.isInitialized) {
+        await this.initialize();
+      }
+
+      // Validate input
+      if (!request.query || typeof request.query !== 'string') {
+        return {
+          success: false,
+          error: 'Query is required and must be a string',
+        };
+      }
+
+      const limit = request.limit || 5;
+      const expandChunks = request.expand_chunks || false;
+
+      // Connect to chunk collection
+      let chunkCollection;
+      try {
+        const ChromaClient = require('chromadb').ChromaClient;
+        const client = new ChromaClient({ path: 'http://localhost:8000' });
+        chunkCollection = await client.getCollection({ name: 'ai_memory_chunks' });
+      } catch (error) {
+        return {
+          success: false,
+          error: 'Chunk collection not available. Please run chunk generation first.',
+        };
+      }
+
+      // Generate embedding for query
+      let embedding;
+      try {
+        const embeddingResponse = await fetch('http://localhost:11434/api/embeddings', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            model: 'nomic-embed-text',
+            prompt: request.query
+          })
+        });
+
+        if (!embeddingResponse.ok) {
+          return {
+            success: false,
+            error: 'Failed to generate query embedding',
+          };
+        }
+
+        const embeddingData = await embeddingResponse.json() as { embedding: number[] };
+        embedding = embeddingData.embedding;
+      } catch (error) {
+        return {
+          success: false,
+          error: 'Embedding service unavailable',
+        };
+      }
+
+      // Search chunks
+      const chunkResults = await chunkCollection.query({
+        queryEmbeddings: [embedding],
+        nResults: limit,
+        include: ['distances', 'documents', 'metadatas']
+      });
+
+      if (!chunkResults.documents || !chunkResults.documents[0] || chunkResults.documents[0].length === 0) {
+        return {
+          success: true,
+          results: {
+            chunks: [],
+            metadata: {
+              total_chunks: 0,
+              avg_similarity_score: 0,
+              search_duration_ms: Date.now() - startTime,
+              compression_ratio: 'N/A'
+            }
+          }
+        };
+      }
+
+      // Convert results to semantic chunks
+      const chunks: SemanticChunk[] = chunkResults.documents[0].map((summary: string, i: number) => {
+        const metadata = chunkResults.metadatas![0]![i];
+        const distance = chunkResults.distances![0]![i];
+        
+        return {
+          chunk_id: metadata!.chunk_id as string,
+          summary: summary,
+          member_count: parseInt(metadata!.member_count as string),
+          member_ids: (metadata!.member_ids as string).split(','),
+          agents: metadata!.agents ? (metadata!.agents as string).split(',').filter((a: string) => a.trim()) : [],
+          date_range: (metadata!.date_range as string) || 'unknown',
+          similarity_score: 1 - (distance! / 1000) // Convert distance to similarity
+        };
+      });
+
+      let expandedEntries = null;
+
+      // If expand_chunks is true, get the full entries for the top chunk
+      if (expandChunks && chunks.length > 0) {
+        const topChunk = chunks[0]!;
+        const entryIds = topChunk.member_ids.map(id => parseInt(id));
+        
+        const entriesQuery = `
+          SELECT id, title, content, created_at, metadata
+          FROM ai_memory.journal_entries 
+          WHERE id = ANY($1)
+          ORDER BY created_at DESC
+        `;
+        
+        try {
+          const entriesResult = await this.query(entriesQuery, [entryIds]);
+          expandedEntries = entriesResult.rows;
+        } catch (error) {
+          console.warn('Failed to expand chunk entries:', error);
+        }
+      }
+
+      const totalChunks = await chunkCollection.count();
+      const avgSimilarity = chunks.length > 0 
+        ? chunks.reduce((sum, c) => sum + c.similarity_score, 0) / chunks.length 
+        : 0;
+
+      return {
+        success: true,
+        results: {
+          chunks,
+          expanded_entries: expandedEntries || undefined,
+          metadata: {
+            total_chunks: totalChunks,
+            avg_similarity_score: avgSimilarity,
+            search_duration_ms: Date.now() - startTime,
+            compression_ratio: `~${Math.round(totalChunks * 5)}:${totalChunks} (5x)`
+          }
+        }
+      };
+
+    } catch (error) {
+      return {
+        success: false,
+        error: `Chunk search failed: ${(error as Error).message}`,
+      };
+    }
+  }
+
+  /**
+   * MCP Tool: mcp__expand_chunk
+   * Expands a specific chunk to show all its member entries
+   */
+  async expandChunk(request: ChunkExpansionRequest): Promise<ChunkExpansionResponse> {
+    const startTime = Date.now();
+
+    try {
+      if (!this.isInitialized) {
+        await this.initialize();
+      }
+
+      // Validate input
+      if (!request.chunk_id || typeof request.chunk_id !== 'string') {
+        return {
+          success: false,
+          error: 'chunk_id is required and must be a string',
+        };
+      }
+
+      // Connect to chunk collection
+      let chunkCollection;
+      try {
+        const ChromaClient = require('chromadb').ChromaClient;
+        const client = new ChromaClient({ path: 'http://localhost:8000' });
+        chunkCollection = await client.getCollection({ name: 'ai_memory_chunks' });
+      } catch (error) {
+        return {
+          success: false,
+          error: 'Chunk collection not available. Please run chunk generation first.',
+        };
+      }
+
+      // Get chunk metadata
+      const chunkResults = await chunkCollection.get({
+        ids: [request.chunk_id],
+        include: ['documents', 'metadatas']
+      });
+
+      if (!chunkResults.documents || !chunkResults.documents[0] || chunkResults.documents.length === 0) {
+        return {
+          success: false,
+          error: `Chunk not found: ${request.chunk_id}`,
+        };
+      }
+
+      const chunkDocument = chunkResults.documents[0];
+      const chunkMetadata = chunkResults.metadatas![0];
+      const memberIds = (chunkMetadata!.member_ids as string).split(',').map((id: string) => parseInt(id.trim()));
+
+      // Create chunk info object
+      const chunkInfo: SemanticChunk = {
+        chunk_id: request.chunk_id,
+        summary: chunkDocument,
+        member_count: parseInt(chunkMetadata!.member_count as string),
+        member_ids: memberIds.map((id: number) => id.toString()),
+        agents: chunkMetadata!.agents ? (chunkMetadata!.agents as string).split(',').filter((a: string) => a.trim()) : [],
+        date_range: (chunkMetadata!.date_range as string) || 'unknown',
+        similarity_score: 1.0 // Perfect match since we're getting the exact chunk
+      };
+
+      // Get all member entries
+      const entriesQuery = `
+        SELECT id, title, content, created_at, agent_id, model_id, 
+               user_project, visibility_level, sections, entry_type, 
+               word_count, category, metadata
+        FROM ai_memory.journal_entries 
+        WHERE id = ANY($1)
+        ORDER BY created_at DESC
+      `;
+      
+      const entriesResult = await this.query(entriesQuery, [memberIds]);
+      const entries = entriesResult.rows;
+
+      return {
+        success: true,
+        results: {
+          chunk_info: chunkInfo,
+          entries: entries,
+          metadata: {
+            chunk_id: request.chunk_id,
+            entry_count: entries.length,
+            expansion_duration_ms: Date.now() - startTime
+          }
+        }
+      };
+
+    } catch (error) {
+      return {
+        success: false,
+        error: `Chunk expansion failed: ${(error as Error).message}`,
+      };
+    }
   }
 }

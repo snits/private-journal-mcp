@@ -307,6 +307,44 @@ export class PrivateJournalServer {
             required: [],
           },
         },
+        {
+          name: 'semantic_search_chunks',
+          description: "Search semantic chunks for faster topic-level discovery. Provides hierarchical search across grouped journal entries.",
+          inputSchema: {
+            type: 'object',
+            properties: {
+              query: {
+                type: 'string',
+                description: "Natural language search query for semantic chunks",
+              },
+              limit: {
+                type: 'number',
+                description: "Maximum number of chunks to return (default: 5)",
+                default: 5,
+              },
+              expand_chunks: {
+                type: 'boolean',
+                description: "Whether to expand the top chunk to show member entries (default: false)",
+                default: false,
+              },
+            },
+            required: ['query'],
+          },
+        },
+        {
+          name: 'expand_chunk',
+          description: "Expand a specific semantic chunk to show all its member journal entries with full content.",
+          inputSchema: {
+            type: 'object',
+            properties: {
+              chunk_id: {
+                type: 'string',
+                description: "ID of the chunk to expand",
+              },
+            },
+            required: ['chunk_id'],
+          },
+        },
       ],
     }));
 
@@ -615,6 +653,67 @@ export class PrivateJournalServer {
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
           throw new Error(`Failed to get semantic search stats: ${errorMessage}`);
+        }
+      }
+
+      // Semantic chunk search tools (require Mnemosyne integration)
+      if (request.params.name === 'semantic_search_chunks') {
+        if (!this.semanticSearchTools) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'Semantic chunk search is not available. Mnemosyne distillation system not detected.',
+              },
+            ],
+          };
+        }
+
+        try {
+          const result = await this.semanticSearchTools.semanticSearchChunks(args as any);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: result.success 
+                  ? JSON.stringify(result.results, null, 2)
+                  : `Error: ${result.error}`,
+              },
+            ],
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+          throw new Error(`Failed to search chunks: ${errorMessage}`);
+        }
+      }
+
+      if (request.params.name === 'expand_chunk') {
+        if (!this.semanticSearchTools) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'Chunk expansion is not available. Mnemosyne distillation system not detected.',
+              },
+            ],
+          };
+        }
+
+        try {
+          const result = await this.semanticSearchTools.expandChunk(args as any);
+          return {
+            content: [
+              {
+                type: 'text',
+                text: result.success 
+                  ? JSON.stringify(result.results, null, 2)
+                  : `Error: ${result.error}`,
+              },
+            ],
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+          throw new Error(`Failed to expand chunk: ${errorMessage}`);
         }
       }
 
