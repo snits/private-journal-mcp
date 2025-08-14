@@ -550,20 +550,14 @@ export class SemanticSearchTools {
       // Get database statistics
       const dbStats = await this.getDatabaseStats();
       
-      // Check vector store status (will be unavailable in this implementation)
-      const vectorStoreStatus = {
-        status: 'unavailable' as const,
-        collection_name: undefined,
-        total_documents: undefined,
-        embedding_model: undefined,
-        last_updated: undefined,
-      };
+      // Check vector store status by connecting to ChromaDB
+      const vectorStoreStatus = await this.checkVectorStoreHealth();
 
-      // Define search capabilities
+      // Define search capabilities based on actual availability
       const searchCapabilities = {
-        semantic_search_available: false, // Not available without full Mnemosyne
-        distillation_available: false,    // Not available without distillation engine
-        model_endpoints: [],
+        semantic_search_available: vectorStoreStatus.status === 'healthy',
+        distillation_available: this.mnemosyneAvailable,
+        model_endpoints: vectorStoreStatus.status === 'healthy' ? [`${process.env.CHROMA_HOST || 'localhost'}:${process.env.CHROMA_PORT || '8000'}`] : [],
         quality_thresholds: {
           min: 0.0,
           default: 0.7,
@@ -716,6 +710,43 @@ export class SemanticSearchTools {
     }
 
     return errors;
+  }
+
+  private async checkVectorStoreHealth(): Promise<{
+    status: 'healthy' | 'unavailable' | 'degraded';
+    collection_name?: string;
+    total_documents?: number;
+    embedding_model?: string;
+    last_updated?: string;
+  }> {
+    try {
+      const chromaHost = process.env.CHROMA_HOST || 'localhost';
+      const chromaPort = process.env.CHROMA_PORT || '8000';
+      const chromaUrl = `http://${chromaHost}:${chromaPort}`;
+      
+      // Check ChromaDB heartbeat
+      const response = await fetch(`${chromaUrl}/api/v2/heartbeat`, { 
+        method: 'GET'
+      });
+      
+      if (!response.ok) {
+        return { status: 'unavailable' };
+      }
+      
+      // Try to get collection info
+      const collectionName = process.env.CHROMA_COLLECTION || 'ai_memory_journal';
+      const embeddingModel = process.env.EMBEDDING_MODEL || 'bge-large';
+      
+      return {
+        status: 'healthy',
+        collection_name: collectionName,
+        total_documents: undefined, // Would need collection API call
+        embedding_model: embeddingModel,
+        last_updated: new Date().toISOString(),
+      };
+    } catch (error) {
+      return { status: 'unavailable' };
+    }
   }
 
   private convertToDistilledInsight(row: any): DistilledInsight {

@@ -82,8 +82,8 @@ export class PostgreSQLJournalManager {
       await client.query(`
         INSERT INTO ai_memory.journal_entries (
           content, timestamp, date_string, file_path, entry_type,
-          embedding, searchable_text, sections, visibility_level, user_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          embedding, sections, visibility_level, user_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
       `, [
         formattedEntry,
         timestamp,
@@ -91,8 +91,7 @@ export class PostgreSQLJournalManager {
         filePath,
         'simple',
         embeddingData.embedding ? Buffer.from(new Float32Array(embeddingData.embedding).buffer) : null,
-        embeddingData.text,
-        JSON.stringify(embeddingData.sections),
+        embeddingData.sections || [],
         'private',
         'private-journal-mcp'  // Default user_id for private-journal-mcp entries
       ]);
@@ -174,8 +173,8 @@ export class PostgreSQLJournalManager {
         INSERT INTO ai_memory.journal_entries (
           content, timestamp, date_string, file_path, entry_type,
           agent_id, model_id, visibility_level,
-          embedding, searchable_text, sections, user_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+          embedding, sections, user_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
       `, [
         formattedEntry,
         timestamp,
@@ -186,8 +185,7 @@ export class PostgreSQLJournalManager {
         thoughts.model_id || null,
         thoughts.visibility_level || 'private',
         embeddingData.embedding ? Buffer.from(new Float32Array(embeddingData.embedding).buffer) : null,
-        embeddingData.text,
-        JSON.stringify(embeddingData.sections),
+        embeddingData.sections || [],
         'private-journal-mcp'  // Default user_id for private-journal-mcp entries
       ]);
     } finally {
