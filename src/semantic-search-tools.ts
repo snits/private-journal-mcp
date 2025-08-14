@@ -848,7 +848,9 @@ export class SemanticSearchTools {
       let chunkCollection;
       try {
         const ChromaClient = require('chromadb').ChromaClient;
-        const client = new ChromaClient({ path: 'http://localhost:8000' });
+        const chromaHost = process.env.CHROMA_HOST || 'localhost';
+        const chromaPort = parseInt(process.env.CHROMA_PORT || '8000');
+        const client = new ChromaClient({ host: chromaHost, port: chromaPort });
         chunkCollection = await client.getCollection({ name: 'ai_memory_chunks' });
       } catch (error) {
         return {
@@ -931,7 +933,7 @@ export class SemanticSearchTools {
         const entryIds = topChunk.member_ids.map(id => parseInt(id));
         
         const entriesQuery = `
-          SELECT id, title, content, created_at, metadata
+          SELECT id, content, created_at, metadata, type, timestamp
           FROM ai_memory.journal_entries 
           WHERE id = ANY($1)
           ORDER BY created_at DESC
@@ -996,7 +998,9 @@ export class SemanticSearchTools {
       let chunkCollection;
       try {
         const ChromaClient = require('chromadb').ChromaClient;
-        const client = new ChromaClient({ path: 'http://localhost:8000' });
+        const chromaHost = process.env.CHROMA_HOST || 'localhost';
+        const chromaPort = parseInt(process.env.CHROMA_PORT || '8000');
+        const client = new ChromaClient({ host: chromaHost, port: chromaPort });
         chunkCollection = await client.getCollection({ name: 'ai_memory_chunks' });
       } catch (error) {
         return {
@@ -1035,9 +1039,9 @@ export class SemanticSearchTools {
 
       // Get all member entries
       const entriesQuery = `
-        SELECT id, title, content, created_at, agent_id, model_id, 
-               user_project, visibility_level, sections, entry_type, 
-               word_count, category, metadata
+        SELECT id, content, created_at, agent_id, model_id, 
+               project as user_project, visibility_level, sections, entry_type, 
+               word_count, category, metadata, type, timestamp
         FROM ai_memory.journal_entries 
         WHERE id = ANY($1)
         ORDER BY created_at DESC
