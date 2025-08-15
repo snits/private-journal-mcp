@@ -6,3 +6,14 @@ coverage/
 .DS_Store
 .vscode/
 .idea/
+
+# Temporary debugging and test scripts
+test-*.js
+debug-*.js
+*-test-*.js
+add_*.js
+check_*.js
+populate_*.js
+sync-backup.js
+test_*.js
+test_*.py
