@@ -4,18 +4,22 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { JournalEntry, VisibilityLevel } from './types';
+import { ProjectContext } from './project-context';
 import { resolveUserJournalPath } from './paths';
 import { EmbeddingService, EmbeddingData } from './embeddings';
+import { ProjectContextDetector } from './project-context';
 
 export class JournalManager {
   private projectJournalPath: string;
   private userJournalPath: string;
   private embeddingService: EmbeddingService;
+  private contextDetector: ProjectContextDetector;
 
   constructor(projectJournalPath: string, userJournalPath?: string) {
     this.projectJournalPath = projectJournalPath;
     this.userJournalPath = userJournalPath || resolveUserJournalPath();
     this.embeddingService = EmbeddingService.getInstance();
+    this.contextDetector = ProjectContextDetector.getInstance();
   }
 
   async writeEntry(content: string): Promise<void> {
@@ -45,8 +49,13 @@ export class JournalManager {
     agent_id?: string;
     model_id?: string;
     visibility_level?: VisibilityLevel;
+    project_context?: ProjectContext;
   }): Promise<void> {
     const timestamp = new Date();
+    
+    // Auto-detect project context if not provided
+    const projectContext = thoughts.project_context || 
+                          await this.contextDetector.detectProjectContext();
     
     // Split thoughts into project-local and user-global, preserving agent metadata
     const projectThoughts = { 
@@ -65,15 +74,15 @@ export class JournalManager {
       visibility_level: thoughts.visibility_level || 'private'
     };
     
-    // Write project notes to project directory
+    // Write project notes to project directory with context
     if (projectThoughts.project_notes) {
-      await this.writeThoughtsToLocation(projectThoughts, timestamp, this.projectJournalPath);
+      await this.writeThoughtsToLocation(projectThoughts, timestamp, this.projectJournalPath, projectContext);
     }
     
-    // Write user thoughts to user directory
+    // Write user thoughts to user directory with context
     const hasUserContent = Object.values(userThoughts).some(value => value !== undefined && typeof value === 'string');
     if (hasUserContent) {
-      await this.writeThoughtsToLocation(userThoughts, timestamp, this.userJournalPath);
+      await this.writeThoughtsToLocation(userThoughts, timestamp, this.userJournalPath, projectContext);
     }
   }
 
@@ -127,7 +136,8 @@ ${content}
       visibility_level?: VisibilityLevel;
     },
     timestamp: Date,
-    basePath: string
+    basePath: string,
+    projectContext?: ProjectContext
   ): Promise<void> {
     const dateString = this.formatDate(timestamp);
     const timeString = this.formatTimestamp(timestamp);
@@ -140,7 +150,7 @@ ${content}
 
     await this.ensureDirectoryExists(dayDirectory);
     
-    const formattedEntry = this.formatThoughts(thoughts, timestamp);
+    const formattedEntry = this.formatThoughts(thoughts, timestamp, projectContext);
     await fs.writeFile(filePath, formattedEntry, 'utf8');
 
     // Generate and save embedding
@@ -156,7 +166,7 @@ ${content}
     agent_id?: string;
     model_id?: string;
     visibility_level?: VisibilityLevel;
-  }, timestamp: Date): string {
+  }, timestamp: Date, projectContext?: ProjectContext): string {
     const timeDisplay = timestamp.toLocaleTimeString('en-US', { 
       hour12: true, 
       hour: 'numeric', 
@@ -191,17 +201,34 @@ ${content}
       sections.push(`## World Knowledge\n\n${thoughts.world_knowledge}`);
     }
 
-    return `---
+    // Include project context in frontmatter if available
+    let frontmatter = `---
 title: "${timeDisplay} - ${dateDisplay}"
 date: ${timestamp.toISOString()}
 timestamp: ${timestamp.getTime()}
 agent_id: ${thoughts.agent_id || 'unknown'}
 model_id: ${thoughts.model_id || 'unknown'}
-visibility_level: ${thoughts.visibility_level || 'private'}
+visibility_level: ${thoughts.visibility_level || 'private'}`;
+
+    if (projectContext) {
+      frontmatter += `
+project_context:
+  project: ${projectContext.project}
+  working_directory: ${projectContext.working_directory}
+  git_root: ${projectContext.git_root || 'null'}
+  git_remote: ${projectContext.git_remote || 'null'}
+  branch: ${projectContext.branch || 'null'}
+  primary_language: ${projectContext.primary_language || 'unknown'}
+  context_hash: ${projectContext.context_hash}
+  confidence: ${projectContext.confidence}`;
+    }
+
+    frontmatter += `
 ---
 
-${sections.join('\n\n')}
 `;
+
+    return frontmatter + sections.join('\n\n') + '\n';
   }
 
   private async generateEmbeddingForEntry(
