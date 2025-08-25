@@ -147,7 +147,7 @@ describe('Parameter Transformation', () => {
       const result = validateSemanticSearchParams(params);
 
       expect(result.isValid).toBe(false);
-      expect(result.errors).toContain('limit must be a number between 1 and 100');
+      expect(result.errors).toContain('limit must be an integer between 1 and 100');
     });
 
     it('should reject invalid threshold values', () => {
@@ -193,6 +193,219 @@ describe('Parameter Transformation', () => {
 
       expect(result.isValid).toBe(false);
       expect(result.errors).toContain('date_range.start must be a valid ISO date string');
+    });
+
+    it('should reject date range where start is after end', () => {
+      const params = { 
+        query: 'test',
+        date_range: {
+          start: '2023-12-31T23:59:59Z',
+          end: '2023-01-01T00:00:00Z'
+        }
+      };
+
+      const result = validateSemanticSearchParams(params);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('date_range.start must be earlier than date_range.end');
+    });
+
+    it('should validate string parameters and reject empty values', () => {
+      const params = { 
+        query: 'test',
+        category: '   ',
+        agent_id: '',
+        model_id: '\t\n',
+        accessible_to_agent: '  ',
+        language_filter: ''
+      };
+
+      const result = validateSemanticSearchParams(params);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('category cannot be empty or only whitespace');
+      expect(result.errors).toContain('agent_id cannot be empty or only whitespace');
+      expect(result.errors).toContain('model_id cannot be empty or only whitespace');
+      expect(result.errors).toContain('accessible_to_agent cannot be empty or only whitespace');
+      expect(result.errors).toContain('language_filter cannot be empty or only whitespace');
+    });
+
+    it('should validate agent_id format', () => {
+      const params = { 
+        query: 'test',
+        agent_id: 'invalid@agent!id'
+      };
+
+      const result = validateSemanticSearchParams(params);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('agent_id must contain only letters, numbers, hyphens, and underscores');
+    });
+
+    it('should validate model_id format', () => {
+      const params = { 
+        query: 'test',
+        model_id: 'invalid@model!id'
+      };
+
+      const result = validateSemanticSearchParams(params);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('model_id must contain only letters, numbers, hyphens, underscores, and dots');
+    });
+
+    it('should validate sections array content', () => {
+      const params = { 
+        query: 'test',
+        sections: ['feelings', 'invalid_section', '', 123]
+      };
+
+      const result = validateSemanticSearchParams(params);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('sections[1] must be one of: feelings, project_notes, user_context, technical_insights, world_knowledge');
+      expect(result.errors).toContain('sections[2] cannot be empty or only whitespace');
+      expect(result.errors).toContain('sections[3] must be a string');
+    });
+
+    it('should validate project_filter formats', () => {
+      const invalidParams1 = { 
+        query: 'test',
+        project_filter: ''
+      };
+
+      const result1 = validateSemanticSearchParams(invalidParams1);
+      expect(result1.isValid).toBe(false);
+      expect(result1.errors).toContain('project_filter string must be "current", "all", or a non-empty project name');
+
+      const invalidParams2 = { 
+        query: 'test',
+        project_filter: []
+      };
+
+      const result2 = validateSemanticSearchParams(invalidParams2);
+      expect(result2.isValid).toBe(false);
+      expect(result2.errors).toContain('project_filter array cannot be empty');
+
+      const invalidParams3 = { 
+        query: 'test',
+        project_filter: ['valid-project', '', 123]
+      };
+
+      const result3 = validateSemanticSearchParams(invalidParams3);
+      expect(result3.isValid).toBe(false);
+      expect(result3.errors).toContain('project_filter[1] cannot be empty or only whitespace');
+      expect(result3.errors).toContain('project_filter[2] must be a string');
+
+      const invalidParams4 = { 
+        query: 'test',
+        project_filter: 123
+      };
+
+      const result4 = validateSemanticSearchParams(invalidParams4);
+      expect(result4.isValid).toBe(false);
+      expect(result4.errors).toContain('project_filter must be a string, array of strings, "current", or "all"');
+    });
+
+    it('should validate numeric parameters more strictly', () => {
+      const params = { 
+        query: 'test',
+        limit: 1.5,
+        similarity_threshold: NaN,
+        quality_threshold: 'not-a-number',
+        min_relevance: Infinity
+      };
+
+      const result = validateSemanticSearchParams(params);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('limit must be an integer between 1 and 100');
+      expect(result.errors).toContain('similarity_threshold must be a number between 0 and 1');
+      expect(result.errors).toContain('quality_threshold must be a number between 0 and 1');
+      expect(result.errors).toContain('min_relevance must be a number between 0 and 1');
+    });
+
+    it('should validate type parameter with non-string input', () => {
+      const params = { 
+        query: 'test',
+        type: 123,
+        visibility_level: []
+      };
+
+      const result = validateSemanticSearchParams(params);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('type must be a string');
+      expect(result.errors).toContain('visibility_level must be a string');
+    });
+
+    it('should sanitize and normalize valid parameters', () => {
+      const params = { 
+        query: '  test query  ',
+        type: '  PROJECT  ',
+        visibility_level: 'PRIVATE',
+        category: '  technical  ',
+        agent_id: '  code-reviewer  ',
+        model_id: '  claude-sonnet-4  ',
+        accessible_to_agent: '  test-agent  ',
+        language_filter: '  typescript  ',
+        sections: ['  feelings  ', '  technical_insights  '],
+        project_filter: ['  project1  ', '  project2  ']
+      };
+
+      const result = validateSemanticSearchParams(params);
+
+      expect(result.isValid).toBe(true);
+      expect(result.sanitized!.query).toBe('test query');
+      expect(result.sanitized!.type).toBe('project');
+      expect(result.sanitized!.visibility_level).toBe('private');
+      expect(result.sanitized!.category).toBe('technical');
+      expect(result.sanitized!.agent_id).toBe('code-reviewer');
+      expect(result.sanitized!.model_id).toBe('claude-sonnet-4');
+      expect(result.sanitized!.accessible_to_agent).toBe('test-agent');
+      expect(result.sanitized!.language_filter).toBe('typescript');
+      expect(result.sanitized!.sections).toEqual(['feelings', 'technical_insights']);
+      expect(result.sanitized!.project_filter).toEqual(['project1', 'project2']);
+    });
+
+    it('should sanitize string project_filter', () => {
+      const params = { 
+        query: 'test',
+        project_filter: '  CURRENT  '
+      };
+
+      const result = validateSemanticSearchParams(params);
+
+      expect(result.isValid).toBe(true);
+      expect(result.sanitized!.project_filter).toBe('current');
+    });
+
+    it('should validate date_range object type', () => {
+      const params = { 
+        query: 'test',
+        date_range: 'not-an-object'
+      };
+
+      const result = validateSemanticSearchParams(params);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('date_range must be an object');
+    });
+
+    it('should validate date_range field types', () => {
+      const params = { 
+        query: 'test',
+        date_range: {
+          start: 123,
+          end: []
+        }
+      };
+
+      const result = validateSemanticSearchParams(params);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('date_range.start must be an ISO date string');
+      expect(result.errors).toContain('date_range.end must be an ISO date string');
     });
   });
 

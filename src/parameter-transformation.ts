@@ -72,7 +72,7 @@ export function transformFromSemanticSearchParams(
 
 /**
  * Validates semantic search insights parameters
- * Ensures all required parameters are present and valid
+ * Ensures all required parameters are present and valid with comprehensive sanitization
  */
 export function validateSemanticSearchParams(params: any): {
   isValid: boolean;
@@ -81,68 +81,189 @@ export function validateSemanticSearchParams(params: any): {
 } {
   const errors: string[] = [];
 
-  // Required parameter validation
+  // Required parameter validation with sanitization
   if (typeof params.query !== 'string') {
     errors.push('query is required and must be a string');
-  } else if (params.query.trim() === '') {
-    errors.push('query cannot be empty or only whitespace');
+  } else {
+    const trimmedQuery = params.query.trim();
+    if (trimmedQuery === '') {
+      errors.push('query cannot be empty or only whitespace');
+    }
   }
 
-  // Optional parameter type validation
-  if (params.limit !== undefined && (typeof params.limit !== 'number' || params.limit < 1 || params.limit > 100)) {
-    errors.push('limit must be a number between 1 and 100');
+  // Numeric parameter validation with proper type checking
+  if (params.limit !== undefined) {
+    if (typeof params.limit !== 'number' || !Number.isInteger(params.limit) || params.limit < 1 || params.limit > 100) {
+      errors.push('limit must be an integer between 1 and 100');
+    }
   }
 
-  if (params.similarity_threshold !== undefined && (typeof params.similarity_threshold !== 'number' || params.similarity_threshold < 0 || params.similarity_threshold > 1)) {
-    errors.push('similarity_threshold must be a number between 0 and 1');
+  if (params.similarity_threshold !== undefined) {
+    if (typeof params.similarity_threshold !== 'number' || isNaN(params.similarity_threshold) || 
+        params.similarity_threshold < 0 || params.similarity_threshold > 1) {
+      errors.push('similarity_threshold must be a number between 0 and 1');
+    }
   }
 
-  if (params.quality_threshold !== undefined && (typeof params.quality_threshold !== 'number' || params.quality_threshold < 0 || params.quality_threshold > 1)) {
-    errors.push('quality_threshold must be a number between 0 and 1');
+  if (params.quality_threshold !== undefined) {
+    if (typeof params.quality_threshold !== 'number' || isNaN(params.quality_threshold) || 
+        params.quality_threshold < 0 || params.quality_threshold > 1) {
+      errors.push('quality_threshold must be a number between 0 and 1');
+    }
   }
 
-  if (params.min_relevance !== undefined && (typeof params.min_relevance !== 'number' || params.min_relevance < 0 || params.min_relevance > 1)) {
-    errors.push('min_relevance must be a number between 0 and 1');
+  if (params.min_relevance !== undefined) {
+    if (typeof params.min_relevance !== 'number' || isNaN(params.min_relevance) || 
+        params.min_relevance < 0 || params.min_relevance > 1) {
+      errors.push('min_relevance must be a number between 0 and 1');
+    }
   }
 
-  if (params.type !== undefined && !['project', 'user', 'both'].includes(params.type)) {
-    errors.push('type must be one of: project, user, both');
+  // Enum validation with case normalization
+  if (params.type !== undefined) {
+    if (typeof params.type !== 'string') {
+      errors.push('type must be a string');
+    } else {
+      const normalizedType = params.type.toLowerCase().trim();
+      if (!['project', 'user', 'both'].includes(normalizedType)) {
+        errors.push('type must be one of: project, user, both');
+      }
+    }
   }
 
-  if (params.visibility_level !== undefined && !['private', 'public', 'team', 'crb'].includes(params.visibility_level)) {
-    errors.push('visibility_level must be one of: private, public, team, crb');
+  if (params.visibility_level !== undefined) {
+    if (typeof params.visibility_level !== 'string') {
+      errors.push('visibility_level must be a string');
+    } else {
+      const normalizedLevel = params.visibility_level.toLowerCase().trim();
+      if (!['private', 'public', 'team', 'crb'].includes(normalizedLevel)) {
+        errors.push('visibility_level must be one of: private, public, team, crb');
+      }
+    }
   }
 
-  if (params.sections !== undefined && !Array.isArray(params.sections)) {
-    errors.push('sections must be an array of strings');
+  // String parameter validation with sanitization
+  if (params.category !== undefined) {
+    if (typeof params.category !== 'string') {
+      errors.push('category must be a string');
+    } else if (params.category.trim() === '') {
+      errors.push('category cannot be empty or only whitespace');
+    }
   }
 
+  if (params.agent_id !== undefined) {
+    if (typeof params.agent_id !== 'string') {
+      errors.push('agent_id must be a string');
+    } else if (params.agent_id.trim() === '') {
+      errors.push('agent_id cannot be empty or only whitespace');
+    } else if (!/^[a-zA-Z0-9_-]+$/.test(params.agent_id.trim())) {
+      errors.push('agent_id must contain only letters, numbers, hyphens, and underscores');
+    }
+  }
+
+  if (params.model_id !== undefined) {
+    if (typeof params.model_id !== 'string') {
+      errors.push('model_id must be a string');
+    } else if (params.model_id.trim() === '') {
+      errors.push('model_id cannot be empty or only whitespace');
+    } else if (!/^[a-zA-Z0-9_.-]+$/.test(params.model_id.trim())) {
+      errors.push('model_id must contain only letters, numbers, hyphens, underscores, and dots');
+    }
+  }
+
+  if (params.accessible_to_agent !== undefined) {
+    if (typeof params.accessible_to_agent !== 'string') {
+      errors.push('accessible_to_agent must be a string');
+    } else if (params.accessible_to_agent.trim() === '') {
+      errors.push('accessible_to_agent cannot be empty or only whitespace');
+    }
+  }
+
+  if (params.language_filter !== undefined) {
+    if (typeof params.language_filter !== 'string') {
+      errors.push('language_filter must be a string');
+    } else if (params.language_filter.trim() === '') {
+      errors.push('language_filter cannot be empty or only whitespace');
+    }
+  }
+
+  // Array validation with content checking
+  if (params.sections !== undefined) {
+    if (!Array.isArray(params.sections)) {
+      errors.push('sections must be an array of strings');
+    } else {
+      const validSections = ['feelings', 'project_notes', 'user_context', 'technical_insights', 'world_knowledge'];
+      for (let i = 0; i < params.sections.length; i++) {
+        if (typeof params.sections[i] !== 'string') {
+          errors.push(`sections[${i}] must be a string`);
+        } else if (params.sections[i].trim() === '') {
+          errors.push(`sections[${i}] cannot be empty or only whitespace`);
+        } else if (!validSections.includes(params.sections[i].trim())) {
+          errors.push(`sections[${i}] must be one of: ${validSections.join(', ')}`);
+        }
+      }
+    }
+  }
+
+  // Boolean validation
   if (params.exclude_current !== undefined && typeof params.exclude_current !== 'boolean') {
     errors.push('exclude_current must be a boolean');
   }
 
-  // Date range validation
-  if (params.date_range) {
-    if (typeof params.date_range !== 'object') {
-      errors.push('date_range must be an object');
-    } else {
-      if (params.date_range.start && typeof params.date_range.start !== 'string') {
-        errors.push('date_range.start must be an ISO date string');
+  // Complex object validation for project_filter
+  if (params.project_filter !== undefined) {
+    if (typeof params.project_filter === 'string') {
+      const normalizedFilter = params.project_filter.toLowerCase().trim();
+      if (!['current', 'all'].includes(normalizedFilter) && normalizedFilter === '') {
+        errors.push('project_filter string must be "current", "all", or a non-empty project name');
       }
-      if (params.date_range.end && typeof params.date_range.end !== 'string') {
-        errors.push('date_range.end must be an ISO date string');
+    } else if (Array.isArray(params.project_filter)) {
+      if (params.project_filter.length === 0) {
+        errors.push('project_filter array cannot be empty');
       }
-      // Validate ISO date format
-      if (params.date_range.start) {
-        const startDate = new Date(params.date_range.start);
-        if (isNaN(startDate.getTime())) {
-          errors.push('date_range.start must be a valid ISO date string');
+      for (let i = 0; i < params.project_filter.length; i++) {
+        if (typeof params.project_filter[i] !== 'string') {
+          errors.push(`project_filter[${i}] must be a string`);
+        } else if (params.project_filter[i].trim() === '') {
+          errors.push(`project_filter[${i}] cannot be empty or only whitespace`);
         }
       }
-      if (params.date_range.end) {
+    } else {
+      errors.push('project_filter must be a string, array of strings, "current", or "all"');
+    }
+  }
+
+  // Date range validation with enhanced checking
+  if (params.date_range !== undefined) {
+    if (typeof params.date_range !== 'object' || params.date_range === null) {
+      errors.push('date_range must be an object');
+    } else {
+      if (params.date_range.start !== undefined) {
+        if (typeof params.date_range.start !== 'string') {
+          errors.push('date_range.start must be an ISO date string');
+        } else {
+          const startDate = new Date(params.date_range.start);
+          if (isNaN(startDate.getTime())) {
+            errors.push('date_range.start must be a valid ISO date string');
+          }
+        }
+      }
+      if (params.date_range.end !== undefined) {
+        if (typeof params.date_range.end !== 'string') {
+          errors.push('date_range.end must be an ISO date string');
+        } else {
+          const endDate = new Date(params.date_range.end);
+          if (isNaN(endDate.getTime())) {
+            errors.push('date_range.end must be a valid ISO date string');
+          }
+        }
+      }
+      // Validate date range logic
+      if (params.date_range.start && params.date_range.end) {
+        const startDate = new Date(params.date_range.start);
         const endDate = new Date(params.date_range.end);
-        if (isNaN(endDate.getTime())) {
-          errors.push('date_range.end must be a valid ISO date string');
+        if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime()) && startDate >= endDate) {
+          errors.push('date_range.start must be earlier than date_range.end');
         }
       }
     }
@@ -154,20 +275,22 @@ export function validateSemanticSearchParams(params: any): {
 
   // Sanitize and return validated parameters
   const sanitized: SemanticSearchInsightsParams = {
-    query: params.query,
+    query: params.query.trim(),
     limit: params.limit || 10,
     similarity_threshold: params.similarity_threshold || 0.7,
     quality_threshold: params.quality_threshold || 0.7,
-    category: params.category,
+    category: params.category?.trim(),
     date_range: params.date_range,
-    type: params.type || 'both',
-    sections: params.sections,
-    agent_id: params.agent_id,
-    model_id: params.model_id,
-    visibility_level: params.visibility_level,
-    accessible_to_agent: params.accessible_to_agent,
-    project_filter: params.project_filter,
-    language_filter: params.language_filter,
+    type: params.type?.toLowerCase().trim() as 'project' | 'user' | 'both' || 'both',
+    sections: params.sections?.map((s: string) => s.trim()),
+    agent_id: params.agent_id?.trim(),
+    model_id: params.model_id?.trim(),
+    visibility_level: params.visibility_level?.toLowerCase().trim() as VisibilityLevel,
+    accessible_to_agent: params.accessible_to_agent?.trim(),
+    project_filter: Array.isArray(params.project_filter) 
+      ? params.project_filter.map((p: string) => p.trim())
+      : params.project_filter?.toLowerCase?.().trim() || params.project_filter,
+    language_filter: params.language_filter?.trim(),
     exclude_current: params.exclude_current || false,
     min_relevance: params.min_relevance || 0.6,
   };
