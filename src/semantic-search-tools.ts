@@ -2,6 +2,7 @@
 // ABOUTME: Provides enhanced semantic search capabilities for journal entries and distilled insights
 
 import { SearchService, SearchResult } from './search';
+import { SearchOptions } from './types';
 
 // Type definitions for the enhanced MCP tools
 export interface MCPToolResult {
@@ -698,6 +699,37 @@ export class SemanticSearchTools {
         recent_entries_count: 0,
       };
     }
+  }
+
+  /**
+   * Convert SearchInsightsRequest parameters to SearchOptions for SearchService.search()
+   */
+  private mapToSearchOptions(request: SearchInsightsRequest): SearchOptions {
+    const options: SearchOptions = {
+      limit: request.limit || 10,
+      type: 'both', // Always search both project and user journals for comprehensive results
+    };
+
+    // Map category to sections array (if category is provided, filter to that section)
+    if (request.category) {
+      options.sections = [request.category];
+    }
+
+    // Map date_range to SearchOptions format
+    if (request.date_range) {
+      options.dateRange = {
+        start: new Date(request.date_range.start),
+        end: new Date(request.date_range.end),
+      };
+    }
+
+    // Note: similarity_threshold and quality_threshold are specific to semantic search
+    // and cannot be mapped to SearchOptions as they don't have equivalents in the base search
+    // These will need to be handled separately in the calling code
+
+    // Note: search_mode is also semantic-search specific and doesn't map to SearchOptions
+
+    return options;
   }
 
   // Helper methods for input validation
