@@ -1,0 +1,253 @@
+// ABOUTME: Parameter transformation utilities for semantic search compatibility
+// ABOUTME: Converts between search_journal and semantic_search_insights parameter formats
+
+import { SearchOptions, SemanticSearchOptions, SemanticSearchInsightsParams, VisibilityLevel } from './types';
+import { SearchInsightsRequest } from './semantic-search-tools';
+
+/**
+ * Transforms search_journal parameters to semantic_search_insights format
+ * Handles parameter mapping and type conversion for API compatibility
+ */
+export function transformToSemanticSearchParams(
+  query: string,
+  searchOptions: SearchOptions
+): SemanticSearchInsightsParams {
+  const params: SemanticSearchInsightsParams = {
+    query,
+    limit: searchOptions.limit,
+    type: searchOptions.type,
+    sections: searchOptions.sections,
+    agent_id: searchOptions.agent_id,
+    model_id: searchOptions.model_id,
+    visibility_level: searchOptions.visibility_level,
+    accessible_to_agent: searchOptions.accessible_to_agent,
+    project_filter: searchOptions.project_filter,
+    language_filter: searchOptions.language_filter,
+    exclude_current: searchOptions.exclude_current,
+    min_relevance: searchOptions.min_relevance,
+  };
+
+  // Convert dateRange (Date objects) to date_range (ISO strings)
+  if (searchOptions.dateRange) {
+    params.date_range = {
+      start: searchOptions.dateRange.start?.toISOString(),
+      end: searchOptions.dateRange.end?.toISOString(),
+    };
+  }
+
+  return params;
+}
+
+/**
+ * Transforms semantic_search_insights parameters to SearchOptions format
+ * Handles reverse parameter mapping for internal processing
+ */
+export function transformFromSemanticSearchParams(
+  params: SemanticSearchInsightsParams
+): SearchOptions {
+  const searchOptions: SearchOptions = {
+    limit: params.limit,
+    type: params.type,
+    sections: params.sections,
+    agent_id: params.agent_id,
+    model_id: params.model_id,
+    visibility_level: params.visibility_level,
+    accessible_to_agent: params.accessible_to_agent,
+    project_filter: params.project_filter,
+    language_filter: params.language_filter,
+    exclude_current: params.exclude_current,
+    min_relevance: params.min_relevance,
+  };
+
+  // Convert date_range (ISO strings) to dateRange (Date objects)
+  if (params.date_range) {
+    searchOptions.dateRange = {
+      start: params.date_range.start ? new Date(params.date_range.start) : undefined,
+      end: params.date_range.end ? new Date(params.date_range.end) : undefined,
+    };
+  }
+
+  return searchOptions;
+}
+
+/**
+ * Validates semantic search insights parameters
+ * Ensures all required parameters are present and valid
+ */
+export function validateSemanticSearchParams(params: any): {
+  isValid: boolean;
+  errors: string[];
+  sanitized?: SemanticSearchInsightsParams;
+} {
+  const errors: string[] = [];
+
+  // Required parameter validation
+  if (!params.query || typeof params.query !== 'string') {
+    errors.push('query is required and must be a string');
+  }
+
+  // Optional parameter type validation
+  if (params.limit !== undefined && (typeof params.limit !== 'number' || params.limit < 1 || params.limit > 100)) {
+    errors.push('limit must be a number between 1 and 100');
+  }
+
+  if (params.similarity_threshold !== undefined && (typeof params.similarity_threshold !== 'number' || params.similarity_threshold < 0 || params.similarity_threshold > 1)) {
+    errors.push('similarity_threshold must be a number between 0 and 1');
+  }
+
+  if (params.quality_threshold !== undefined && (typeof params.quality_threshold !== 'number' || params.quality_threshold < 0 || params.quality_threshold > 1)) {
+    errors.push('quality_threshold must be a number between 0 and 1');
+  }
+
+  if (params.min_relevance !== undefined && (typeof params.min_relevance !== 'number' || params.min_relevance < 0 || params.min_relevance > 1)) {
+    errors.push('min_relevance must be a number between 0 and 1');
+  }
+
+  if (params.type !== undefined && !['project', 'user', 'both'].includes(params.type)) {
+    errors.push('type must be one of: project, user, both');
+  }
+
+  if (params.visibility_level !== undefined && !['private', 'public', 'team', 'crb'].includes(params.visibility_level)) {
+    errors.push('visibility_level must be one of: private, public, team, crb');
+  }
+
+  if (params.sections !== undefined && !Array.isArray(params.sections)) {
+    errors.push('sections must be an array of strings');
+  }
+
+  if (params.exclude_current !== undefined && typeof params.exclude_current !== 'boolean') {
+    errors.push('exclude_current must be a boolean');
+  }
+
+  // Date range validation
+  if (params.date_range) {
+    if (typeof params.date_range !== 'object') {
+      errors.push('date_range must be an object');
+    } else {
+      if (params.date_range.start && typeof params.date_range.start !== 'string') {
+        errors.push('date_range.start must be an ISO date string');
+      }
+      if (params.date_range.end && typeof params.date_range.end !== 'string') {
+        errors.push('date_range.end must be an ISO date string');
+      }
+      // Validate ISO date format
+      if (params.date_range.start) {
+        const startDate = new Date(params.date_range.start);
+        if (isNaN(startDate.getTime())) {
+          errors.push('date_range.start must be a valid ISO date string');
+        }
+      }
+      if (params.date_range.end) {
+        const endDate = new Date(params.date_range.end);
+        if (isNaN(endDate.getTime())) {
+          errors.push('date_range.end must be a valid ISO date string');
+        }
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    return { isValid: false, errors };
+  }
+
+  // Sanitize and return validated parameters
+  const sanitized: SemanticSearchInsightsParams = {
+    query: params.query,
+    limit: params.limit || 10,
+    similarity_threshold: params.similarity_threshold || 0.7,
+    quality_threshold: params.quality_threshold || 0.7,
+    category: params.category,
+    date_range: params.date_range,
+    type: params.type || 'both',
+    sections: params.sections,
+    agent_id: params.agent_id,
+    model_id: params.model_id,
+    visibility_level: params.visibility_level,
+    accessible_to_agent: params.accessible_to_agent,
+    project_filter: params.project_filter,
+    language_filter: params.language_filter,
+    exclude_current: params.exclude_current || false,
+    min_relevance: params.min_relevance || 0.6,
+  };
+
+  return { isValid: true, errors: [], sanitized };
+}
+
+/**
+ * Checks if the provided parameters include any project-aware search options
+ * Used to determine whether to use ProjectAwareSearchService
+ */
+export function hasProjectAwareParams(params: SemanticSearchInsightsParams): boolean {
+  return !!(
+    params.project_filter !== undefined ||
+    params.language_filter !== undefined ||
+    params.exclude_current ||
+    (params.min_relevance !== undefined && params.min_relevance !== 0.6)
+  );
+}
+
+/**
+ * Extracts semantic-specific parameters from combined parameter set
+ * Used to separate semantic search parameters from standard search parameters
+ */
+export function extractSemanticParams(params: SemanticSearchInsightsParams): {
+  similarity_threshold?: number;
+  quality_threshold?: number;
+  category?: string;
+} {
+  return {
+    similarity_threshold: params.similarity_threshold,
+    quality_threshold: params.quality_threshold,
+    category: params.category,
+  };
+}
+
+/**
+ * Converts SemanticSearchInsightsParams to SearchInsightsRequest format
+ * Handles the specific requirements of the Mnemosyne semantic search tools
+ */
+export function toSearchInsightsRequest(params: SemanticSearchInsightsParams): SearchInsightsRequest {
+  const request: SearchInsightsRequest = {
+    query: params.query,
+    limit: params.limit,
+    similarity_threshold: params.similarity_threshold,
+    quality_threshold: params.quality_threshold,
+    category: params.category,
+  };
+
+  // Only include date_range if both start and end are provided
+  // as SearchInsightsRequest requires both properties to be present
+  if (params.date_range?.start && params.date_range?.end) {
+    request.date_range = {
+      start: params.date_range.start,
+      end: params.date_range.end,
+    };
+  }
+
+  return request;
+}
+
+/**
+ * Creates a backward-compatible response format
+ * Ensures responses match expected format regardless of source
+ */
+export function normalizeSearchResponse(results: any[]): any[] {
+  return results.map(result => {
+    const text = result.text || result.searchable_text || '';
+    const excerpt = result.excerpt || (text ? text.slice(0, 200) : '');
+    
+    return {
+      score: result.score || result.similarity_score || 0,
+      path: result.path || result.file_path || '',
+      excerpt,
+      text,
+      timestamp: result.timestamp || result.created_at || new Date(),
+      type: result.type || result.entry_type || 'unknown',
+      sections: result.sections || [],
+      // Preserve additional fields for project-aware responses
+      ...(result.cross_project_warning && { cross_project_warning: result.cross_project_warning }),
+      ...(result.project_name && { project_name: result.project_name }),
+      ...(result.context_match && { context_match: result.context_match }),
+    };
+  });
+}
