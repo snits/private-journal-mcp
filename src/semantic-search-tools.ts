@@ -50,6 +50,7 @@ export interface SearchInsightsResponse {
       avg_similarity_score: number;
       search_duration_ms: number;
       search_mode: string;
+      search_tier?: string;
     };
   };
   error?: string;
@@ -215,7 +216,7 @@ export interface ChunkExpansionResponse {
 
 /**
  * Semantic Search Tools Integration
- * 
+ *
  * This class provides integration points for the Mnemosyne semantic search tools
  * without requiring the full Mnemosyne infrastructure to be available.
  * It gracefully degrades to traditional search when semantic capabilities are unavailable.
@@ -239,7 +240,7 @@ export class SemanticSearchTools {
     if (this.dbManager.query) {
       return await this.dbManager.query(sql, params);
     }
-    
+
     // If dbManager has a pool (like PostgreSQLJournalManager)
     if (this.dbManager.pool) {
       const client = await this.dbManager.pool.connect();
@@ -250,7 +251,7 @@ export class SemanticSearchTools {
         client.release();
       }
     }
-    
+
     throw new Error('No suitable query method available on database manager');
   }
 
@@ -264,7 +265,7 @@ export class SemanticSearchTools {
           AND table_name = 'distillations'
         ) as distillations_exist
       `);
-      
+
       this.mnemosyneAvailable = result.rows[0]?.distillations_exist || false;
       this.isInitialized = true;
     } catch (error) {
@@ -284,13 +285,6 @@ export class SemanticSearchTools {
     try {
       if (!this.isInitialized) {
         await this.initialize();
-      }
-
-      if (!this.mnemosyneAvailable) {
-        return {
-          success: false,
-          error: 'Semantic search insights are not available. Mnemosyne distillation system not detected.',
-        };
       }
 
       // Validate input
@@ -313,6 +307,246 @@ export class SemanticSearchTools {
         date_range: request.date_range,
       };
 
+      // Implement tiered fallback system
+      let searchResult: SearchInsightsResponse;
+      let searchTier: string;
+
+      // Tier 1: ChromaDB vector search (full semantic)
+      try {
+        searchResult = await this.searchWithChromaDB(searchParams, startTime);
+        searchTier = 'ChromaDB Vector Search';
+        if (searchResult.success) {
+          return this.addTierMetadata(searchResult, searchTier);
+        }
+      } catch (error) {
+        console.warn('ChromaDB search failed, falling back to Tier 2:', error);
+      }
+
+      // Tier 2: PostgreSQL + pgvector (database vector search)
+      try {
+        searchResult = await this.searchWithPgVector(searchParams, startTime);
+        searchTier = 'PostgreSQL + pgvector';
+        if (searchResult.success) {
+          return this.addTierMetadata(searchResult, searchTier);
+        }
+      } catch (error) {
+        console.warn('PostgreSQL pgvector search failed, falling back to Tier 3:', error);
+      }
+
+      // Tier 3: PostgreSQL text search (current fallback implementation)
+      try {
+        searchResult = await this.searchWithPostgreSQLText(searchParams, startTime);
+        searchTier = 'PostgreSQL Text Search';
+        if (searchResult.success) {
+          return this.addTierMetadata(searchResult, searchTier);
+        }
+      } catch (error) {
+        console.warn('PostgreSQL text search failed, falling back to Tier 4:', error);
+      }
+
+      // Tier 4: File-based search (when no database available)
+      try {
+        searchResult = await this.searchWithFileSystem(searchParams, startTime);
+        searchTier = 'File System Search';
+        return this.addTierMetadata(searchResult, searchTier);
+      } catch (error) {
+        const searchDuration = Date.now() - startTime;
+        return {
+          success: false,
+          error: `All search tiers failed. Final error: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        };
+      }
+    } catch (error) {
+      const searchDuration = Date.now() - startTime;
+      return {
+        success: false,
+        error: `Semantic search is temporarily unavailable: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      };
+    }
+  }
+
+  /**
+   * Helper method to add tier metadata to search results
+   */
+  private addTierMetadata(result: SearchInsightsResponse, tier: string): SearchInsightsResponse {
+    if (result.success && result.results) {
+      result.results.metadata = {
+        ...result.results.metadata,
+        search_tier: tier,
+      };
+    }
+    return result;
+  }
+
+  /**
+   * Tier 1: ChromaDB vector search implementation
+   */
+  private async searchWithChromaDB(
+    searchParams: any,
+    startTime: number
+  ): Promise<SearchInsightsResponse> {
+    // Check ChromaDB availability
+    const vectorStoreStatus = await this.checkVectorStoreHealth();
+    if (vectorStoreStatus.status !== 'healthy') {
+      throw new Error('ChromaDB not available');
+    }
+
+    try {
+      const ChromaClient = require('chromadb').ChromaClient;
+      const chromaHost = process.env.CHROMA_HOST || 'localhost';
+      const chromaPort = parseInt(process.env.CHROMA_PORT || '8000');
+      const client = new ChromaClient({ host: chromaHost, port: chromaPort });
+
+      const collectionName = process.env.CHROMA_COLLECTION || 'ai_memory_journal';
+      const collection = await client.getCollection({ name: collectionName });
+
+      // Perform vector search
+      const searchResults = await collection.query({
+        queryTexts: [searchParams.query],
+        nResults: searchParams.limit,
+        where: searchParams.category ? { category: searchParams.category } : undefined,
+      });
+
+      // Convert ChromaDB results to DistilledInsight format
+      const insights: DistilledInsight[] = [];
+      if (searchResults.documents && searchResults.documents[0]) {
+        for (let i = 0; i < searchResults.documents[0].length; i++) {
+          const doc = searchResults.documents[0][i];
+          const metadata = searchResults.metadatas?.[0]?.[i] || {};
+          const distance = searchResults.distances?.[0]?.[i] || 0;
+          const similarity = Math.max(0, 1 - distance); // Convert distance to similarity
+
+          if (similarity >= searchParams.similarity_threshold) {
+            insights.push({
+              id: searchResults.ids[0][i],
+              title: metadata.title || 'Untitled',
+              summary: doc,
+              key_insights: metadata.key_insights ? JSON.parse(metadata.key_insights) : [],
+              category: metadata.category || 'general',
+              quality_score: parseFloat(metadata.quality_score) || 0.7,
+              similarity_score: similarity,
+              source_entry_id: metadata.source_entry_id || '',
+              timestamp: metadata.timestamp || new Date().toISOString(),
+              tags: metadata.tags ? JSON.parse(metadata.tags) : [],
+            });
+          }
+        }
+      }
+
+      const avgQualityScore =
+        insights.length > 0
+          ? insights.reduce((sum, insight) => sum + insight.quality_score, 0) / insights.length
+          : 0;
+
+      const avgSimilarityScore =
+        insights.length > 0
+          ? insights.reduce((sum, insight) => sum + (insight.similarity_score || 0), 0) /
+            insights.length
+          : 0;
+
+      const searchDuration = Date.now() - startTime;
+
+      return {
+        success: true,
+        results: {
+          insights,
+          metadata: {
+            total_insights: insights.length,
+            avg_quality_score: avgQualityScore,
+            avg_similarity_score: avgSimilarityScore,
+            search_duration_ms: searchDuration,
+            search_mode: searchParams.search_mode,
+          },
+        },
+      };
+    } catch (error) {
+      throw new Error(
+        `ChromaDB search failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
+   * Tier 2: PostgreSQL + pgvector search implementation
+   */
+  private async searchWithPgVector(
+    searchParams: any,
+    startTime: number
+  ): Promise<SearchInsightsResponse> {
+    // Check if Mnemosyne is available (required for distillations table)
+    if (!this.mnemosyneAvailable) {
+      throw new Error('Mnemosyne distillation system not available');
+    }
+
+    // Check if pgvector extension is available
+    const vectorSupport = await this.checkPgVectorSupport();
+    if (!vectorSupport) {
+      throw new Error('pgvector extension not available');
+    }
+
+    try {
+      // Build filters for distillations table
+      const whereConditions: string[] = [];
+      const params: any[] = [];
+      let paramIndex = 1;
+
+      // Quality threshold filter
+      whereConditions.push(`overall_quality >= $${paramIndex}`);
+      params.push(searchParams.quality_threshold);
+      paramIndex++;
+
+      // Category filter
+      if (searchParams.category) {
+        whereConditions.push(`category = $${paramIndex}`);
+        params.push(searchParams.category);
+        paramIndex++;
+      }
+
+      // Date range filter
+      if (searchParams.date_range) {
+        whereConditions.push(`created_at >= $${paramIndex} AND created_at <= $${paramIndex + 1}`);
+        params.push(searchParams.date_range.start, searchParams.date_range.end);
+        paramIndex += 2;
+      }
+
+      const whereClause =
+        whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+
+      // Assuming we have an embedding column in the distillations table
+      const query = `
+        SELECT *, 
+               (summary_embedding <=> $${paramIndex}::vector) as distance,
+               (1 - (summary_embedding <=> $${paramIndex}::vector)) as similarity_score
+        FROM ai_memory.distillations 
+        ${whereClause}
+        AND (1 - (summary_embedding <=> $${paramIndex}::vector)) >= $${paramIndex + 1}
+        ORDER BY similarity_score DESC, overall_quality DESC
+        LIMIT $${paramIndex + 2}
+      `;
+
+      // Note: This assumes we have embeddings for the query - would need actual embedding generation
+      // For now, we'll throw an error to indicate this tier needs implementation
+      throw new Error('pgvector search requires embedding generation implementation');
+    } catch (error) {
+      throw new Error(
+        `pgvector search failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
+   * Tier 3: PostgreSQL text search (current implementation)
+   */
+  private async searchWithPostgreSQLText(
+    searchParams: any,
+    startTime: number
+  ): Promise<SearchInsightsResponse> {
+    // Check if Mnemosyne is available (required for distillations table)
+    if (!this.mnemosyneAvailable) {
+      throw new Error('Mnemosyne distillation system not available');
+    }
+
+    try {
       // Build SQL query for distillations
       const whereConditions: string[] = [];
       const params: any[] = [];
@@ -337,9 +571,10 @@ export class SemanticSearchTools {
         paramIndex += 2;
       }
 
-      const whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
+      const whereClause =
+        whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : '';
 
-      // Use traditional text search (fallback approach)
+      // Use traditional text search (current fallback approach)
       const query = `
         SELECT * FROM ai_memory.distillations 
         WHERE (title ILIKE $1 OR summary ILIKE $1 OR key_insights::text ILIKE $1) 
@@ -354,9 +589,13 @@ export class SemanticSearchTools {
       const insights = result.rows.map((row: any) => this.convertToDistilledInsight(row));
 
       // Calculate metrics
-      const avgQualityScore = insights.length > 0
-        ? insights.reduce((sum: number, insight: DistilledInsight) => sum + insight.quality_score, 0) / insights.length
-        : 0;
+      const avgQualityScore =
+        insights.length > 0
+          ? insights.reduce(
+              (sum: number, insight: DistilledInsight) => sum + insight.quality_score,
+              0
+            ) / insights.length
+          : 0;
 
       const searchDuration = Date.now() - startTime;
 
@@ -367,18 +606,107 @@ export class SemanticSearchTools {
           metadata: {
             total_insights: insights.length,
             avg_quality_score: avgQualityScore,
-            avg_similarity_score: 0, // Not available in fallback mode
+            avg_similarity_score: 0, // Not available in text search mode
             search_duration_ms: searchDuration,
             search_mode: searchParams.search_mode,
           },
         },
       };
     } catch (error) {
+      throw new Error(
+        `PostgreSQL text search failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
+   * Tier 4: File-based search implementation
+   */
+  private async searchWithFileSystem(
+    searchParams: any,
+    startTime: number
+  ): Promise<SearchInsightsResponse> {
+    try {
+      // Use SearchService for file-based search
+      const searchResults = await this.searchService.search(searchParams.query, {
+        limit: searchParams.limit,
+        sections: [
+          'feelings',
+          'project_notes',
+          'technical_insights',
+          'user_context',
+          'world_knowledge',
+        ],
+        type: 'both', // Search both project and user journals
+      });
+
+      // Filter by similarity threshold and convert SearchResults to DistilledInsight format
+      const filteredResults = searchResults.filter(
+        (result) => result.score >= searchParams.similarity_threshold
+      );
+      const insights: DistilledInsight[] = filteredResults.map((result, index) => ({
+        id: `file_${index}_${Date.now()}`,
+        title: `Journal Entry: ${new Date(result.timestamp).toLocaleDateString()}`,
+        summary: result.excerpt,
+        key_insights: result.sections,
+        category: 'journal_entry',
+        quality_score: result.score,
+        similarity_score: result.score,
+        source_entry_id: result.path,
+        timestamp: new Date(result.timestamp).toISOString(),
+        tags: [result.type],
+      }));
+
+      // Calculate metrics
+      const avgQualityScore =
+        insights.length > 0
+          ? insights.reduce((sum, insight) => sum + insight.quality_score, 0) / insights.length
+          : 0;
+
+      const avgSimilarityScore =
+        insights.length > 0
+          ? insights.reduce((sum, insight) => sum + (insight.similarity_score || 0), 0) /
+            insights.length
+          : 0;
+
       const searchDuration = Date.now() - startTime;
+
       return {
-        success: false,
-        error: `Semantic search is temporarily unavailable: ${error instanceof Error ? error.message : 'Unknown error'}`,
+        success: true,
+        results: {
+          insights,
+          metadata: {
+            total_insights: insights.length,
+            avg_quality_score: avgQualityScore,
+            avg_similarity_score: avgSimilarityScore,
+            search_duration_ms: searchDuration,
+            search_mode: searchParams.search_mode,
+          },
+        },
       };
+    } catch (error) {
+      throw new Error(
+        `File system search failed: ${error instanceof Error ? error.message : 'Unknown error'}`
+      );
+    }
+  }
+
+  /**
+   * Check if pgvector extension is available in PostgreSQL
+   */
+  private async checkPgVectorSupport(): Promise<boolean> {
+    try {
+      const result = await this.query(`
+        SELECT EXISTS (
+          SELECT FROM pg_extension 
+          WHERE extname = 'vector'
+        ) as vector_available
+      `);
+
+      return result.rows[0]?.vector_available || false;
+    } catch (error) {
+      console.warn('Could not check pgvector availability:', error);
+      return false;
     }
   }
 
@@ -396,7 +724,8 @@ export class SemanticSearchTools {
       if (!this.mnemosyneAvailable) {
         return {
           success: false,
-          error: 'Related insights search is not available. Mnemosyne distillation system not detected.',
+          error:
+            'Related insights search is not available. Mnemosyne distillation system not detected.',
         };
       }
 
@@ -439,7 +768,8 @@ export class SemanticSearchTools {
         referenceContent = entryResult.rows[0].content;
         referenceContext = {
           title: 'Journal Entry',
-          summary: referenceContent.substring(0, 200) + (referenceContent.length > 200 ? '...' : ''),
+          summary:
+            referenceContent.substring(0, 200) + (referenceContent.length > 200 ? '...' : ''),
           category: entryResult.rows[0].category || 'uncategorized',
         };
       } else if (searchParams.reference_type === 'insight') {
@@ -481,9 +811,13 @@ export class SemanticSearchTools {
       // Exclude original reference if requested
       if (searchParams.exclude_original) {
         if (searchParams.reference_type === 'insight') {
-          insights = insights.filter((insight: DistilledInsight) => insight.id !== searchParams.reference_id);
+          insights = insights.filter(
+            (insight: DistilledInsight) => insight.id !== searchParams.reference_id
+          );
         } else {
-          insights = insights.filter((insight: DistilledInsight) => insight.source_entry_id !== searchParams.reference_id);
+          insights = insights.filter(
+            (insight: DistilledInsight) => insight.source_entry_id !== searchParams.reference_id
+          );
         }
       }
 
@@ -528,7 +862,8 @@ export class SemanticSearchTools {
       if (!this.mnemosyneAvailable) {
         return {
           success: false,
-          error: 'Distillation and search is not available. Mnemosyne distillation system not detected.',
+          error:
+            'Distillation and search is not available. Mnemosyne distillation system not detected.',
         };
       }
 
@@ -611,7 +946,7 @@ export class SemanticSearchTools {
 
       // Get database statistics
       const dbStats = await this.getDatabaseStats();
-      
+
       // Check vector store status by connecting to ChromaDB
       const vectorStoreStatus = await this.checkVectorStoreHealth();
 
@@ -619,7 +954,10 @@ export class SemanticSearchTools {
       const searchCapabilities = {
         semantic_search_available: vectorStoreStatus.status === 'healthy',
         distillation_available: this.mnemosyneAvailable,
-        model_endpoints: vectorStoreStatus.status === 'healthy' ? [`${process.env.CHROMA_HOST || 'localhost'}:${process.env.CHROMA_PORT || '8000'}`] : [],
+        model_endpoints:
+          vectorStoreStatus.status === 'healthy'
+            ? [`${process.env.CHROMA_HOST || 'localhost'}:${process.env.CHROMA_PORT || '8000'}`]
+            : [],
         quality_thresholds: {
           min: 0.0,
           default: 0.7,
@@ -629,7 +967,7 @@ export class SemanticSearchTools {
 
       // System health check
       const systemHealth = {
-        overall_status: this.mnemosyneAvailable ? 'degraded' as const : 'unavailable' as const,
+        overall_status: this.mnemosyneAvailable ? ('degraded' as const) : ('unavailable' as const),
         components: {
           database: true,
           vector_store: false,
@@ -663,7 +1001,7 @@ export class SemanticSearchTools {
     try {
       // Get journal entries count
       const entriesResult = await this.query(
-        'SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL \'7 days\') as recent FROM ai_memory.journal_entries'
+        "SELECT COUNT(*) as total, COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '7 days') as recent FROM ai_memory.journal_entries"
       );
 
       let distillationsData = {
@@ -797,7 +1135,11 @@ export class SemanticSearchTools {
     }
 
     if (request.days_back !== undefined) {
-      if (typeof request.days_back !== 'number' || request.days_back < 1 || request.days_back > 365) {
+      if (
+        typeof request.days_back !== 'number' ||
+        request.days_back < 1 ||
+        request.days_back > 365
+      ) {
         errors.push('days_back must be a number between 1 and 365');
       }
     }
@@ -816,20 +1158,20 @@ export class SemanticSearchTools {
       const chromaHost = process.env.CHROMA_HOST || 'localhost';
       const chromaPort = process.env.CHROMA_PORT || '8000';
       const chromaUrl = `http://${chromaHost}:${chromaPort}`;
-      
+
       // Check ChromaDB heartbeat
-      const response = await fetch(`${chromaUrl}/api/v2/heartbeat`, { 
-        method: 'GET'
+      const response = await fetch(`${chromaUrl}/api/v2/heartbeat`, {
+        method: 'GET',
       });
-      
+
       if (!response.ok) {
         return { status: 'unavailable' };
       }
-      
+
       // Try to get collection info
       const collectionName = process.env.CHROMA_COLLECTION || 'ai_memory_journal';
       const embeddingModel = process.env.EMBEDDING_MODEL || 'bge-large';
-      
+
       return {
         status: 'healthy',
         collection_name: collectionName,
@@ -903,8 +1245,8 @@ export class SemanticSearchTools {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             model: 'nomic-embed-text',
-            prompt: request.query
-          })
+            prompt: request.query,
+          }),
         });
 
         if (!embeddingResponse.ok) {
@@ -914,7 +1256,7 @@ export class SemanticSearchTools {
           };
         }
 
-        const embeddingData = await embeddingResponse.json() as { embedding: number[] };
+        const embeddingData = (await embeddingResponse.json()) as { embedding: number[] };
         embedding = embeddingData.embedding;
       } catch (error) {
         return {
@@ -927,10 +1269,14 @@ export class SemanticSearchTools {
       const chunkResults = await chunkCollection.query({
         queryEmbeddings: [embedding],
         nResults: limit,
-        include: ['distances', 'documents', 'metadatas']
+        include: ['distances', 'documents', 'metadatas'],
       });
 
-      if (!chunkResults.documents || !chunkResults.documents[0] || chunkResults.documents[0].length === 0) {
+      if (
+        !chunkResults.documents ||
+        !chunkResults.documents[0] ||
+        chunkResults.documents[0].length === 0
+      ) {
         return {
           success: true,
           results: {
@@ -939,42 +1285,46 @@ export class SemanticSearchTools {
               total_chunks: 0,
               avg_similarity_score: 0,
               search_duration_ms: Date.now() - startTime,
-              compression_ratio: 'N/A'
-            }
-          }
+              compression_ratio: 'N/A',
+            },
+          },
         };
       }
 
       // Convert results to semantic chunks
-      const chunks: SemanticChunk[] = chunkResults.documents[0].map((summary: string, i: number) => {
-        const metadata = chunkResults.metadatas![0]![i];
-        const distance = chunkResults.distances![0]![i];
-        
-        return {
-          chunk_id: metadata!.chunk_id as string,
-          summary: summary,
-          member_count: parseInt(metadata!.member_count as string),
-          member_ids: (metadata!.member_ids as string).split(','),
-          agents: metadata!.agents ? (metadata!.agents as string).split(',').filter((a: string) => a.trim()) : [],
-          date_range: (metadata!.date_range as string) || 'unknown',
-          similarity_score: 1 - (distance! / 1000) // Convert distance to similarity
-        };
-      });
+      const chunks: SemanticChunk[] = chunkResults.documents[0].map(
+        (summary: string, i: number) => {
+          const metadata = chunkResults.metadatas![0]![i];
+          const distance = chunkResults.distances![0]![i];
+
+          return {
+            chunk_id: metadata!.chunk_id as string,
+            summary: summary,
+            member_count: parseInt(metadata!.member_count as string),
+            member_ids: (metadata!.member_ids as string).split(','),
+            agents: metadata!.agents
+              ? (metadata!.agents as string).split(',').filter((a: string) => a.trim())
+              : [],
+            date_range: (metadata!.date_range as string) || 'unknown',
+            similarity_score: 1 - distance! / 1000, // Convert distance to similarity
+          };
+        }
+      );
 
       let expandedEntries = null;
 
       // If expand_chunks is true, get the full entries for the top chunk
       if (expandChunks && chunks.length > 0) {
         const topChunk = chunks[0]!;
-        const entryIds = topChunk.member_ids.map(id => parseInt(id));
-        
+        const entryIds = topChunk.member_ids.map((id) => parseInt(id));
+
         const entriesQuery = `
           SELECT id, content, created_at, metadata, type, timestamp
           FROM ai_memory.journal_entries 
           WHERE id = ANY($1)
           ORDER BY created_at DESC
         `;
-        
+
         try {
           const entriesResult = await this.query(entriesQuery, [entryIds]);
           expandedEntries = entriesResult.rows;
@@ -984,9 +1334,10 @@ export class SemanticSearchTools {
       }
 
       const totalChunks = await chunkCollection.count();
-      const avgSimilarity = chunks.length > 0 
-        ? chunks.reduce((sum, c) => sum + c.similarity_score, 0) / chunks.length 
-        : 0;
+      const avgSimilarity =
+        chunks.length > 0
+          ? chunks.reduce((sum, c) => sum + c.similarity_score, 0) / chunks.length
+          : 0;
 
       return {
         success: true,
@@ -997,11 +1348,10 @@ export class SemanticSearchTools {
             total_chunks: totalChunks,
             avg_similarity_score: avgSimilarity,
             search_duration_ms: Date.now() - startTime,
-            compression_ratio: `~${Math.round(totalChunks * 5)}:${totalChunks} (5x)`
-          }
-        }
+            compression_ratio: `~${Math.round(totalChunks * 5)}:${totalChunks} (5x)`,
+          },
+        },
       };
-
     } catch (error) {
       return {
         success: false,
@@ -1048,10 +1398,14 @@ export class SemanticSearchTools {
       // Get chunk metadata
       const chunkResults = await chunkCollection.get({
         ids: [request.chunk_id],
-        include: ['documents', 'metadatas']
+        include: ['documents', 'metadatas'],
       });
 
-      if (!chunkResults.documents || !chunkResults.documents[0] || chunkResults.documents.length === 0) {
+      if (
+        !chunkResults.documents ||
+        !chunkResults.documents[0] ||
+        chunkResults.documents.length === 0
+      ) {
         return {
           success: false,
           error: `Chunk not found: ${request.chunk_id}`,
@@ -1060,7 +1414,9 @@ export class SemanticSearchTools {
 
       const chunkDocument = chunkResults.documents[0];
       const chunkMetadata = chunkResults.metadatas![0];
-      const memberIds = (chunkMetadata!.member_ids as string).split(',').map((id: string) => parseInt(id.trim()));
+      const memberIds = (chunkMetadata!.member_ids as string)
+        .split(',')
+        .map((id: string) => parseInt(id.trim()));
 
       // Create chunk info object
       const chunkInfo: SemanticChunk = {
@@ -1068,9 +1424,11 @@ export class SemanticSearchTools {
         summary: chunkDocument,
         member_count: parseInt(chunkMetadata!.member_count as string),
         member_ids: memberIds.map((id: number) => id.toString()),
-        agents: chunkMetadata!.agents ? (chunkMetadata!.agents as string).split(',').filter((a: string) => a.trim()) : [],
+        agents: chunkMetadata!.agents
+          ? (chunkMetadata!.agents as string).split(',').filter((a: string) => a.trim())
+          : [],
         date_range: (chunkMetadata!.date_range as string) || 'unknown',
-        similarity_score: 1.0 // Perfect match since we're getting the exact chunk
+        similarity_score: 1.0, // Perfect match since we're getting the exact chunk
       };
 
       // Get all member entries
@@ -1082,7 +1440,7 @@ export class SemanticSearchTools {
         WHERE id = ANY($1)
         ORDER BY created_at DESC
       `;
-      
+
       const entriesResult = await this.query(entriesQuery, [memberIds]);
       const entries = entriesResult.rows;
 
@@ -1094,11 +1452,10 @@ export class SemanticSearchTools {
           metadata: {
             chunk_id: request.chunk_id,
             entry_count: entries.length,
-            expansion_duration_ms: Date.now() - startTime
-          }
-        }
+            expansion_duration_ms: Date.now() - startTime,
+          },
+        },
       };
-
     } catch (error) {
       return {
         success: false,
