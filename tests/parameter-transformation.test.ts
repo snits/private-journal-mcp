@@ -123,6 +123,24 @@ describe('Parameter Transformation', () => {
       expect(result.errors).toContain('query is required and must be a string');
     });
 
+    it('should reject empty query', () => {
+      const params = { query: '' };
+
+      const result = validateSemanticSearchParams(params);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('query cannot be empty or only whitespace');
+    });
+
+    it('should reject whitespace-only query', () => {
+      const params = { query: '   \t\n  ' };
+
+      const result = validateSemanticSearchParams(params);
+
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain('query cannot be empty or only whitespace');
+    });
+
     it('should reject invalid limit', () => {
       const params = { query: 'test', limit: 150 };
 

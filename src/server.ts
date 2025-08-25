@@ -519,6 +519,9 @@ export class PrivateJournalServer {
         if (!args || typeof args.query !== 'string') {
           throw new Error('query is required and must be a string');
         }
+        if (args.query.trim() === '') {
+          throw new Error('query cannot be empty or only whitespace');
+        }
 
         const options = {
           limit: typeof args.limit === 'number' ? args.limit : 10,

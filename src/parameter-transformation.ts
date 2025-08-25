@@ -82,8 +82,10 @@ export function validateSemanticSearchParams(params: any): {
   const errors: string[] = [];
 
   // Required parameter validation
-  if (!params.query || typeof params.query !== 'string') {
+  if (typeof params.query !== 'string') {
     errors.push('query is required and must be a string');
+  } else if (params.query.trim() === '') {
+    errors.push('query cannot be empty or only whitespace');
   }
 
   // Optional parameter type validation
