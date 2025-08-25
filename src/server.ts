@@ -5,6 +5,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { ProcessFeelingsRequest, ProcessThoughtsRequest } from './types';
+import { validateSemanticSearchParams, transformFromSemanticSearchParams, hasProjectAwareParams, normalizeSearchResponse, toSearchInsightsRequest } from './parameter-transformation';
 import { SearchService } from './search';
 import { ProjectAwareSearchService } from './project-aware-search';
 import { JournalManagerFactory, JournalManagerInterface } from './journal-manager-factory';
@@ -254,6 +255,60 @@ export class PrivateJournalServer {
                   end: { type: 'string', description: 'ISO date string for range end' },
                 },
                 description: 'Filter by date range (optional)',
+              },
+              // Extended parameters for search_journal compatibility (Priority 0)
+              type: {
+                type: 'string',
+                enum: ['project', 'user', 'both'],
+                description: 'Search in project-specific notes, user-global notes, or both (default: both)',
+                default: 'both',
+              },
+              sections: {
+                type: 'array',
+                items: { type: 'string' },
+                description: "Filter by section types (e.g., ['feelings', 'technical_insights'])",
+              },
+              agent_id: {
+                type: 'string',
+                description: 'Filter by specific agent identity',
+              },
+              model_id: {
+                type: 'string',
+                description: 'Filter by specific model identity',
+              },
+              visibility_level: {
+                type: 'string',
+                enum: ['private', 'public', 'team', 'crb'],
+                description: 'Filter by visibility level',
+              },
+              accessible_to_agent: {
+                type: 'string',
+                description: 'Show only entries accessible to this agent (considers visibility rules)',
+              },
+              project_filter: {
+                oneOf: [
+                  { type: 'string', enum: ['current', 'all'] },
+                  { type: 'string' },
+                  { type: 'array', items: { type: 'string' } },
+                ],
+                description: "Filter by project context: 'current' (auto-detect), 'all', specific project name(s)",
+              },
+              // Additional project-aware parameters
+              language_filter: {
+                type: 'string',
+                description: 'Filter by primary programming language',
+              },
+              exclude_current: {
+                type: 'boolean',
+                description: 'Exclude current project from results (default: false)',
+                default: false,
+              },
+              min_relevance: {
+                type: 'number',
+                description: 'Minimum relevance score for cross-project results (0.0-1.0, default: 0.6)',
+                default: 0.6,
+                minimum: 0.0,
+                maximum: 1.0,
               },
             },
             required: ['query'],
@@ -630,19 +685,65 @@ export class PrivateJournalServer {
 
       // Semantic search tools (require Mnemosyne integration)
       if (request.params.name === 'semantic_search_insights') {
-        if (!this.semanticSearchTools) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: 'Semantic search insights are not available. Mnemosyne distillation system not detected.',
-              },
-            ],
-          };
+        // Validate parameters first
+        const validation = validateSemanticSearchParams(args);
+        if (!validation.isValid) {
+          throw new Error(`Invalid parameters: ${validation.errors.join(', ')}`);
         }
 
+        const params = validation.sanitized!;
+
+        // Check if Mnemosyne semantic search tools are available
+        if (!this.semanticSearchTools) {
+          // Fall back to using search_journal logic with semantic parameters
+          try {
+            const searchOptions = transformFromSemanticSearchParams(params);
+            
+            // Use project-aware search if any project-specific options are provided
+            const useProjectAwareSearch = hasProjectAwareParams(params);
+
+            if (useProjectAwareSearch) {
+              const results = await this.projectAwareSearch.search(params.query, searchOptions);
+              const normalizedResults = normalizeSearchResponse(results);
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify({
+                      results: normalizedResults,
+                      fallback_used: 'project_aware_search',
+                      message: 'Semantic search insights not available. Using project-aware search fallback.'
+                    }, null, 2),
+                  },
+                ],
+              };
+            } else {
+              // Fall back to traditional search
+              const results = await this.journalManager.searchBySimilarity(params.query, searchOptions);
+              const normalizedResults = normalizeSearchResponse(results);
+              return {
+                content: [
+                  {
+                    type: 'text',
+                    text: JSON.stringify({
+                      results: normalizedResults,
+                      fallback_used: 'traditional_search',
+                      message: 'Semantic search insights not available. Using traditional search fallback.'
+                    }, null, 2),
+                  },
+                ],
+              };
+            }
+          } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            throw new Error(`Failed to search insights (fallback): ${errorMessage}`);
+          }
+        }
+
+        // Use Mnemosyne semantic search tools when available
         try {
-          const result = await this.semanticSearchTools.semanticSearchInsights(args as any);
+          const searchRequest = toSearchInsightsRequest(params);
+          const result = await this.semanticSearchTools.semanticSearchInsights(searchRequest);
           return {
             content: [
               {
