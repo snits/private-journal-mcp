@@ -221,11 +221,13 @@ export interface ChunkExpansionResponse {
  */
 export class SemanticSearchTools {
   private dbManager: any;
+  private searchService: SearchService;
   private isInitialized = false;
   private mnemosyneAvailable = false;
 
   constructor(dbManager: any) {
     this.dbManager = dbManager;
+    this.searchService = new SearchService();
   }
 
   /**
