@@ -704,32 +704,58 @@ export class PrivateJournalServer {
 
             if (useProjectAwareSearch) {
               const results = await this.projectAwareSearch.search(params.query, searchOptions);
-              const normalizedResults = normalizeSearchResponse(results);
               return {
                 content: [
                   {
                     type: 'text',
-                    text: JSON.stringify({
-                      results: normalizedResults,
-                      fallback_used: 'project_aware_search',
-                      message: 'Semantic search insights not available. Using project-aware search fallback.'
-                    }, null, 2),
+                    text:
+                      results.length > 0
+                        ? `Found ${results.length} relevant entries:\n\n${results
+                            .map((result, i) => {
+                              const contextWarning = result.cross_project_warning
+                                ? ` ⚠️  [${result.project_name || 'other project'}]`
+                                : '';
+                              const contextMatch =
+                                result.context_match < 0.8
+                                  ? ` (context: ${(result.context_match * 100).toFixed(0)}%)`
+                                  : '';
+
+                              const timestampDisplay = result.timestamp
+                                ? typeof result.timestamp === 'number'
+                                  ? new Date(result.timestamp).toLocaleDateString()
+                                  : new Date(result.timestamp).toLocaleDateString()
+                                : 'Unknown date';
+                              return (
+                                `${i + 1}. [Score: ${result.score.toFixed(3)}${contextMatch}]${contextWarning} ${timestampDisplay} (${result.type})\n` +
+                                `   Sections: ${result.sections.join(', ')}\n` +
+                                `   Path: ${result.path}\n` +
+                                `   Excerpt: ${result.excerpt || result.text?.slice(0, 200)}...\n`
+                              );
+                            })
+                            .join('\n')}`
+                        : 'No relevant entries found.',
                   },
                 ],
               };
             } else {
               // Fall back to traditional search
               const results = await this.journalManager.searchBySimilarity(params.query, searchOptions);
-              const normalizedResults = normalizeSearchResponse(results);
               return {
                 content: [
                   {
                     type: 'text',
-                    text: JSON.stringify({
-                      results: normalizedResults,
-                      fallback_used: 'traditional_search',
-                      message: 'Semantic search insights not available. Using traditional search fallback.'
-                    }, null, 2),
+                    text:
+                      results.length > 0
+                        ? `Found ${results.length} relevant entries:\n\n${results
+                            .map(
+                              (result, i) =>
+                                `${i + 1}. [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} (${result.entry_type})\n` +
+                                `   Sections: ${result.sections.join(', ')}\n` +
+                                `   Path: ${result.file_path}\n` +
+                                `   Excerpt: ${result.searchable_text?.slice(0, 200)}...\n`
+                            )
+                            .join('\n')}`
+                        : 'No relevant entries found.',
                   },
                 ],
               };
