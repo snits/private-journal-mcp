@@ -7,8 +7,8 @@ export interface JournalEntry {
   content: string;
   timestamp: Date;
   filePath: string;
-  agent_id?: string;        // e.g., "code-reviewer", "debug-specialist", "claude-general"
-  model_id?: string;        // e.g., "claude-sonnet-4", "gpt-4o", "gemini-2.0-pro"
+  agent_id?: string; // e.g., "code-reviewer", "debug-specialist", "claude-general"
+  model_id?: string; // e.g., "claude-sonnet-4", "gpt-4o", "gemini-2.0-pro"
   visibility_level?: VisibilityLevel;
 }
 
@@ -38,7 +38,7 @@ export interface SearchOptions {
   agent_id?: string;
   model_id?: string;
   visibility_level?: VisibilityLevel;
-  accessible_to_agent?: string;  // Filter by what this agent can see
+  accessible_to_agent?: string; // Filter by what this agent can see
   dateRange?: {
     start?: Date;
     end?: Date;

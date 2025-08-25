@@ -18,16 +18,16 @@ export class EmbeddingService {
   extractSearchableText(content: string): { text: string; sections: string[] } {
     // Remove frontmatter
     const contentWithoutFrontmatter = content.replace(/^---[\s\S]*?---\n/, '');
-    
+
     // Extract sections (markdown headers)
     const sections: string[] = [];
     const headerRegex = /^## (.+)$/gm;
     let match;
-    
+
     while ((match = headerRegex.exec(contentWithoutFrontmatter)) !== null) {
       sections.push(match[1].trim());
     }
-    
+
     // Clean text for embedding
     const text = contentWithoutFrontmatter
       .replace(/^#+\s+/gm, '') // Remove markdown headers
@@ -36,7 +36,7 @@ export class EmbeddingService {
       .replace(/`(.*?)`/g, '$1') // Remove code
       .replace(/\n+/g, ' ') // Replace newlines with spaces
       .trim();
-    
+
     return { text, sections };
   }
 
@@ -46,22 +46,22 @@ export class EmbeddingService {
     if (text.trim().length === 0) {
       return [];
     }
-    
+
     // Generate a deterministic mock embedding based on text content
     const chars = text.toLowerCase();
     const embedding = new Array(384).fill(0); // BGE-large-en-v1.5 dimension
-    
+
     for (let i = 0; i < chars.length && i < embedding.length; i++) {
       embedding[i] = (chars.charCodeAt(i) / 255.0) * 2 - 1; // Normalize to [-1, 1]
     }
-    
+
     // Add some variation based on text length
     const lengthFactor = Math.sin(text.length / 100.0);
     for (let i = 0; i < embedding.length; i++) {
       embedding[i] += lengthFactor * 0.1;
       embedding[i] = Math.max(-1, Math.min(1, embedding[i])); // Clamp to [-1, 1]
     }
-    
+
     return embedding;
   }
 
@@ -69,22 +69,22 @@ export class EmbeddingService {
     if (a.length !== b.length || a.length === 0) {
       return 0;
     }
-    
+
     let dotProduct = 0;
     let normA = 0;
     let normB = 0;
-    
+
     for (let i = 0; i < a.length; i++) {
       dotProduct += a[i] * b[i];
       normA += a[i] * a[i];
       normB += b[i] * b[i];
     }
-    
+
     const denominator = Math.sqrt(normA) * Math.sqrt(normB);
     if (denominator === 0) {
       return 0;
     }
-    
+
     return dotProduct / denominator;
   }
 }

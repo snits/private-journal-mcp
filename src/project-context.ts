@@ -36,17 +36,17 @@ export class ProjectContextDetector {
 
   async detectProjectContext(workingDir?: string): Promise<ProjectContext> {
     const cwd = workingDir || process.cwd();
-    
+
     // Check cache first
     if (this.contextCache.has(cwd)) {
       return this.contextCache.get(cwd)!;
     }
 
     const context = await this.analyzeDirectory(cwd);
-    
+
     // Cache result for session
     this.contextCache.set(cwd, context);
-    
+
     return context;
   }
 
@@ -63,7 +63,7 @@ export class ProjectContextDetector {
       if (gitRoot) {
         gitRemote = this.getGitRemote(gitRoot);
         branch = this.getCurrentBranch(gitRoot);
-        
+
         if (gitRemote) {
           project = this.extractProjectNameFromRemote(gitRemote);
           confidence = 'high';
@@ -78,12 +78,12 @@ export class ProjectContextDetector {
 
     // Fallback to directory name if git analysis didn't work
     if (confidence === 'low') {
-      const segments = cwd.split(path.sep).filter(s => s.length > 0);
-      
+      const segments = cwd.split(path.sep).filter((s) => s.length > 0);
+
       // Look for common project directory patterns
       const projectIndicators = ['devel', 'projects', 'src', 'code', 'work'];
-      const projectIndex = segments.findIndex(seg => projectIndicators.includes(seg));
-      
+      const projectIndex = segments.findIndex((seg) => projectIndicators.includes(seg));
+
       if (projectIndex >= 0 && projectIndex < segments.length - 1) {
         project = segments[projectIndex + 1];
         confidence = 'medium';
@@ -110,13 +110,13 @@ export class ProjectContextDetector {
       primary_language: primaryLanguage,
       context_hash: contextHash,
       timestamp: new Date().toISOString(),
-      confidence
+      confidence,
     };
   }
 
   private findGitRoot(startDir: string): string | undefined {
     let currentDir = startDir;
-    
+
     while (currentDir !== path.dirname(currentDir)) {
       try {
         const gitDir = path.join(currentDir, '.git');
@@ -129,7 +129,7 @@ export class ProjectContextDetector {
       }
       currentDir = path.dirname(currentDir);
     }
-    
+
     return undefined;
   }
 
@@ -138,7 +138,7 @@ export class ProjectContextDetector {
       const output = execSync('git remote get-url origin', {
         cwd: gitRoot,
         encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore']
+        stdio: ['ignore', 'pipe', 'ignore'],
       });
       return output.trim();
     } catch (error) {
@@ -151,7 +151,7 @@ export class ProjectContextDetector {
       const output = execSync('git branch --show-current', {
         cwd: gitRoot,
         encoding: 'utf8',
-        stdio: ['ignore', 'pipe', 'ignore']
+        stdio: ['ignore', 'pipe', 'ignore'],
       });
       return output.trim();
     } catch (error) {
@@ -164,12 +164,12 @@ export class ProjectContextDetector {
     // https://github.com/user/repo.git -> repo
     // git@github.com:user/repo.git -> repo
     // https://github.com/user/repo -> repo
-    
+
     const patterns = [
       /github\.com[:/][\w-]+\/([\w-]+)(?:\.git)?$/,
       /gitlab\.com[:/][\w-]+\/([\w-]+)(?:\.git)?$/,
       /bitbucket\.org[:/][\w-]+\/([\w-]+)(?:\.git)?$/,
-      /[:/]([\w-]+)(?:\.git)?$/  // Generic fallback
+      /[:/]([\w-]+)(?:\.git)?$/, // Generic fallback
     ];
 
     for (const pattern of patterns) {
@@ -191,34 +191,37 @@ export class ProjectContextDetector {
     try {
       // Check for specific language indicators
       const files = await fs.readdir(projectRoot);
-      
+
       // Go detection
       if (files.includes('go.mod') || files.includes('go.sum')) {
         detectionResults.push({
           language: 'go',
           confidence: 0.9,
-          indicators: ['go.mod', 'go.sum']
+          indicators: ['go.mod', 'go.sum'],
         });
       }
 
       // TypeScript/JavaScript detection
       if (files.includes('package.json')) {
-        const hasTypeScript = files.includes('tsconfig.json') || 
-                             files.some(f => f.endsWith('.ts'));
+        const hasTypeScript =
+          files.includes('tsconfig.json') || files.some((f) => f.endsWith('.ts'));
         detectionResults.push({
           language: hasTypeScript ? 'typescript' : 'javascript',
           confidence: hasTypeScript ? 0.8 : 0.7,
-          indicators: hasTypeScript ? ['tsconfig.json', '*.ts files'] : ['package.json']
+          indicators: hasTypeScript ? ['tsconfig.json', '*.ts files'] : ['package.json'],
         });
       }
 
       // Python detection
-      if (files.includes('requirements.txt') || files.includes('pyproject.toml') || 
-          files.includes('setup.py')) {
+      if (
+        files.includes('requirements.txt') ||
+        files.includes('pyproject.toml') ||
+        files.includes('setup.py')
+      ) {
         detectionResults.push({
           language: 'python',
           confidence: 0.8,
-          indicators: ['requirements.txt', 'pyproject.toml', 'setup.py']
+          indicators: ['requirements.txt', 'pyproject.toml', 'setup.py'],
         });
       }
 
@@ -227,7 +230,7 @@ export class ProjectContextDetector {
         detectionResults.push({
           language: 'rust',
           confidence: 0.9,
-          indicators: ['Cargo.toml']
+          indicators: ['Cargo.toml'],
         });
       }
 
@@ -236,10 +239,9 @@ export class ProjectContextDetector {
         detectionResults.push({
           language: 'java',
           confidence: 0.8,
-          indicators: ['pom.xml', 'build.gradle']
+          indicators: ['pom.xml', 'build.gradle'],
         });
       }
-
     } catch (error) {
       // Directory reading failed, return unknown
     }
@@ -258,7 +260,7 @@ export class ProjectContextDetector {
     let hash = 0;
     for (let i = 0; i < data.length; i++) {
       const char = data.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
+      hash = (hash << 5) - hash + char;
       hash = hash & hash; // Convert to 32-bit integer
     }
     return Math.abs(hash).toString(16).substring(0, 8);
@@ -272,8 +274,10 @@ export class ProjectContextDetector {
     }
 
     // Same language and similar naming
-    if (context1.primary_language === context2.primary_language &&
-        context1.primary_language !== 'unknown') {
+    if (
+      context1.primary_language === context2.primary_language &&
+      context1.primary_language !== 'unknown'
+    ) {
       return true;
     }
 

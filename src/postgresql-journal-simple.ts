@@ -4,11 +4,11 @@
 import { Pool, PoolClient } from 'pg';
 import { DatabaseConfig, createDatabaseConfig } from './database-config';
 import { EmbeddingService } from './embedding-service';
-import { 
-  VisibilityLevel, 
-  SearchOptions, 
-  DatabaseEntry, 
-  SearchResult 
+import {
+  VisibilityLevel,
+  SearchOptions,
+  DatabaseEntry,
+  SearchResult,
 } from './private-journal-types';
 
 export class PostgreSQLJournalManager {
@@ -32,7 +32,7 @@ export class PostgreSQLJournalManager {
       max: this.config.maxConnections,
       idleTimeoutMillis: this.config.idleTimeoutMs,
       connectionTimeoutMillis: this.config.connectionTimeoutMs,
-      application_name: 'private-journal-postgresql'
+      application_name: 'private-journal-postgresql',
     });
 
     // Test connection
@@ -47,18 +47,25 @@ export class PostgreSQLJournalManager {
     }
   }
 
-  async checkEntryExists(filePath: string, timestamp: number, contentPreview: string): Promise<boolean> {
+  async checkEntryExists(
+    filePath: string,
+    timestamp: number,
+    contentPreview: string
+  ): Promise<boolean> {
     const timeWindow = 60000; // 1 minute
     const client = await this.pool.connect();
-    
+
     try {
-      const result = await client.query(`
+      const result = await client.query(
+        `
         SELECT id FROM ai_memory.journal_entries 
         WHERE ABS(EXTRACT(EPOCH FROM (timestamp - to_timestamp($1::bigint / 1000))) * 1000) <= $2 
         AND substring(content, 1, 200) = substring($3, 1, 200)
         LIMIT 1
-      `, [timestamp, timeWindow, contentPreview]);
-      
+      `,
+        [timestamp, timeWindow, contentPreview]
+      );
+
       return result.rows.length > 0;
     } finally {
       client.release();
@@ -72,29 +79,38 @@ export class PostgreSQLJournalManager {
     const filePath = `${dateString}/${timeString}.md`;
 
     const formattedEntry = this.formatEntry(content, timestamp);
-    
+
     // Generate embedding
-    const embeddingData = await this.generateEmbeddingForContent(formattedEntry, timestamp, filePath);
-    
+    const embeddingData = await this.generateEmbeddingForContent(
+      formattedEntry,
+      timestamp,
+      filePath
+    );
+
     const client = await this.pool.connect();
-    
+
     try {
-      await client.query(`
+      await client.query(
+        `
         INSERT INTO ai_memory.journal_entries (
           content, timestamp, date_string, file_path, entry_type,
           embedding, sections, visibility_level, user_id
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      `, [
-        formattedEntry,
-        timestamp,
-        dateString,
-        filePath,
-        'simple',
-        embeddingData.embedding ? Buffer.from(new Float32Array(embeddingData.embedding).buffer) : null,
-        embeddingData.sections || [],
-        'private',
-        'private-journal-mcp'  // Default user_id for private-journal-mcp entries
-      ]);
+      `,
+        [
+          formattedEntry,
+          timestamp,
+          dateString,
+          filePath,
+          'simple',
+          embeddingData.embedding
+            ? Buffer.from(new Float32Array(embeddingData.embedding).buffer)
+            : null,
+          embeddingData.sections || [],
+          'private',
+          'private-journal-mcp', // Default user_id for private-journal-mcp entries
+        ]
+      );
     } finally {
       client.release();
     }
@@ -111,13 +127,13 @@ export class PostgreSQLJournalManager {
     visibility_level?: VisibilityLevel;
   }): Promise<void> {
     const timestamp = new Date();
-    
+
     // Split thoughts into project-local and user-global
-    const projectThoughts = { 
+    const projectThoughts = {
       project_notes: thoughts.project_notes,
       agent_id: thoughts.agent_id,
       model_id: thoughts.model_id,
-      visibility_level: thoughts.visibility_level || 'private'
+      visibility_level: thoughts.visibility_level || 'private',
     };
     const userThoughts = {
       feelings: thoughts.feelings,
@@ -126,17 +142,17 @@ export class PostgreSQLJournalManager {
       world_knowledge: thoughts.world_knowledge,
       agent_id: thoughts.agent_id,
       model_id: thoughts.model_id,
-      visibility_level: thoughts.visibility_level || 'private'
+      visibility_level: thoughts.visibility_level || 'private',
     };
-    
+
     // Write project notes if present
     if (projectThoughts.project_notes) {
       await this.writeThoughtsToDatabase(projectThoughts, timestamp, 'project');
     }
-    
+
     // Write user thoughts if present
-    const hasUserContent = Object.values(userThoughts).some(value => 
-      value !== undefined && typeof value === 'string'
+    const hasUserContent = Object.values(userThoughts).some(
+      (value) => value !== undefined && typeof value === 'string'
     );
     if (hasUserContent) {
       await this.writeThoughtsToDatabase(userThoughts, timestamp, 'user');
@@ -162,32 +178,41 @@ export class PostgreSQLJournalManager {
     const filePath = `${type}/${dateString}/${timeString}.md`;
 
     const formattedEntry = this.formatThoughts(thoughts, timestamp);
-    
+
     // Generate embedding
-    const embeddingData = await this.generateEmbeddingForContent(formattedEntry, timestamp, filePath);
+    const embeddingData = await this.generateEmbeddingForContent(
+      formattedEntry,
+      timestamp,
+      filePath
+    );
 
     const client = await this.pool.connect();
-    
+
     try {
-      await client.query(`
+      await client.query(
+        `
         INSERT INTO ai_memory.journal_entries (
           content, timestamp, date_string, file_path, entry_type,
           agent_id, model_id, visibility_level,
           embedding, sections, user_id
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
-      `, [
-        formattedEntry,
-        timestamp,
-        dateString,
-        filePath,
-        'thoughts',
-        thoughts.agent_id || null,
-        thoughts.model_id || null,
-        thoughts.visibility_level || 'private',
-        embeddingData.embedding ? Buffer.from(new Float32Array(embeddingData.embedding).buffer) : null,
-        embeddingData.sections || [],
-        'private-journal-mcp'  // Default user_id for private-journal-mcp entries
-      ]);
+      `,
+        [
+          formattedEntry,
+          timestamp,
+          dateString,
+          filePath,
+          'thoughts',
+          thoughts.agent_id || null,
+          thoughts.model_id || null,
+          thoughts.visibility_level || 'private',
+          embeddingData.embedding
+            ? Buffer.from(new Float32Array(embeddingData.embedding).buffer)
+            : null,
+          embeddingData.sections || [],
+          'private-journal-mcp', // Default user_id for private-journal-mcp entries
+        ]
+      );
     } finally {
       client.release();
     }
@@ -200,44 +225,38 @@ export class PostgreSQLJournalManager {
   ): Promise<{ embedding: number[]; text: string; sections: string[] }> {
     try {
       const { text, sections } = this.embeddingService.extractSearchableText(content);
-      
+
       if (text.trim().length === 0) {
         return {
           embedding: [],
           text: '',
-          sections: []
+          sections: [],
         };
       }
 
       const embedding = await this.embeddingService.generateEmbedding(text);
-      
+
       return {
         embedding,
         text,
-        sections
+        sections,
       };
     } catch (error) {
       console.error(`Failed to generate embedding for ${filePath}:`, error);
       return {
         embedding: [],
         text: '',
-        sections: []
+        sections: [],
       };
     }
   }
 
   async searchBySimilarity(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
-    const {
-      limit = 10,
-      agent_id,
-      model_id,
-      visibility_level,
-      accessible_to_agent
-    } = options;
+    const { limit = 10, agent_id, model_id, visibility_level, accessible_to_agent } = options;
 
     // Generate embedding for query
     const queryEmbedding = await this.embeddingService.generateEmbedding(query);
-    
+
     // Build WHERE clauses for filtering
     const whereClauses: string[] = ['embedding IS NOT NULL'];
     const params: any[] = [];
@@ -269,7 +288,7 @@ export class PostgreSQLJournalManager {
     }
 
     const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-    
+
     const sql = `
       SELECT id, content, timestamp, file_path, agent_id, model_id, 
              visibility_level, entry_type, searchable_text, sections, embedding
@@ -279,21 +298,28 @@ export class PostgreSQLJournalManager {
     `;
 
     const client = await this.pool.connect();
-    
+
     try {
       const result = await client.query(sql, params);
-      
+
       // Calculate similarity scores
       const results: SearchResult[] = [];
       for (const row of result.rows) {
         if (!row.embedding) continue;
-        
+
         try {
           // Convert Buffer back to number array
-          const embeddingArray = Array.from(new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4));
+          const embeddingArray = Array.from(
+            new Float32Array(
+              row.embedding.buffer,
+              row.embedding.byteOffset,
+              row.embedding.byteLength / 4
+            )
+          );
           const score = this.embeddingService.cosineSimilarity(queryEmbedding, embeddingArray);
-          
-          if (score > 0.1) { // Minimum similarity threshold
+
+          if (score > 0.1) {
+            // Minimum similarity threshold
             results.push({
               id: row.id,
               content: row.content,
@@ -305,7 +331,7 @@ export class PostgreSQLJournalManager {
               entry_type: row.entry_type,
               score,
               searchable_text: row.searchable_text,
-              sections: this.parseJsonSafely(row.sections, [])
+              sections: this.parseJsonSafely(row.sections, []),
             });
           }
         } catch (error) {
@@ -315,9 +341,7 @@ export class PostgreSQLJournalManager {
       }
 
       // Sort by similarity score (descending) and limit results
-      return results
-        .sort((a, b) => b.score - a.score)
-        .slice(0, limit);
+      return results.sort((a, b) => b.score - a.score).slice(0, limit);
     } finally {
       client.release();
     }
@@ -330,7 +354,7 @@ export class PostgreSQLJournalManager {
       model_id,
       visibility_level,
       accessible_to_agent,
-      dateRange
+      dateRange,
     } = options;
 
     // Build WHERE clauses for filtering
@@ -375,7 +399,7 @@ export class PostgreSQLJournalManager {
     }
 
     const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-    
+
     const sql = `
       SELECT id, content, timestamp, file_path, agent_id, model_id, 
              visibility_level, entry_type, searchable_text, sections
@@ -386,12 +410,12 @@ export class PostgreSQLJournalManager {
     `;
 
     params.push(limit);
-    
+
     const client = await this.pool.connect();
-    
+
     try {
       const result = await client.query(sql, params);
-      
+
       return result.rows.map((row: any) => ({
         id: row.id,
         content: row.content,
@@ -403,7 +427,7 @@ export class PostgreSQLJournalManager {
         entry_type: row.entry_type,
         score: 1, // No similarity score for recent entries
         searchable_text: row.searchable_text,
-        sections: this.parseJsonSafely(row.sections, [])
+        sections: this.parseJsonSafely(row.sections, []),
       }));
     } finally {
       client.release();
@@ -412,14 +436,17 @@ export class PostgreSQLJournalManager {
 
   async readEntryByPath(filePath: string): Promise<string | null> {
     const client = await this.pool.connect();
-    
+
     try {
-      const result = await client.query(`
+      const result = await client.query(
+        `
         SELECT content FROM ai_memory.journal_entries 
         WHERE file_path = $1
         LIMIT 1
-      `, [filePath]);
-      
+      `,
+        [filePath]
+      );
+
       return result.rows[0] ? result.rows[0].content : null;
     } finally {
       client.release();
@@ -429,7 +456,7 @@ export class PostgreSQLJournalManager {
   // Utility methods for compatibility with existing code
   private parseJsonSafely(jsonString: string | null, defaultValue: any = null): any {
     if (!jsonString) return defaultValue;
-    
+
     try {
       return JSON.parse(jsonString);
     } catch (error) {
@@ -452,21 +479,23 @@ export class PostgreSQLJournalManager {
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const seconds = String(date.getSeconds()).padStart(2, '0');
-    const microseconds = String(date.getMilliseconds() * 1000 + Math.floor(Math.random() * 1000)).padStart(6, '0');
+    const microseconds = String(
+      date.getMilliseconds() * 1000 + Math.floor(Math.random() * 1000)
+    ).padStart(6, '0');
     return `${hours}-${minutes}-${seconds}-${microseconds}`;
   }
 
   private formatEntry(content: string, timestamp: Date): string {
-    const timeDisplay = timestamp.toLocaleTimeString('en-US', { 
-      hour12: true, 
-      hour: 'numeric', 
-      minute: '2-digit', 
-      second: '2-digit' 
+    const timeDisplay = timestamp.toLocaleTimeString('en-US', {
+      hour12: true,
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
     });
-    const dateDisplay = timestamp.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    const dateDisplay = timestamp.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
     });
 
     return `---
@@ -479,46 +508,49 @@ ${content}
 `;
   }
 
-  private formatThoughts(thoughts: {
-    feelings?: string;
-    project_notes?: string;
-    user_context?: string;
-    technical_insights?: string;
-    world_knowledge?: string;
-    agent_id?: string;
-    model_id?: string;
-    visibility_level?: VisibilityLevel;
-  }, timestamp: Date): string {
-    const timeDisplay = timestamp.toLocaleTimeString('en-US', { 
-      hour12: true, 
-      hour: 'numeric', 
-      minute: '2-digit', 
-      second: '2-digit' 
+  private formatThoughts(
+    thoughts: {
+      feelings?: string;
+      project_notes?: string;
+      user_context?: string;
+      technical_insights?: string;
+      world_knowledge?: string;
+      agent_id?: string;
+      model_id?: string;
+      visibility_level?: VisibilityLevel;
+    },
+    timestamp: Date
+  ): string {
+    const timeDisplay = timestamp.toLocaleTimeString('en-US', {
+      hour12: true,
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
     });
-    const dateDisplay = timestamp.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    const dateDisplay = timestamp.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
     });
 
     const sections = [];
-    
+
     if (thoughts.feelings) {
       sections.push(`## Feelings\n\n${thoughts.feelings}`);
     }
-    
+
     if (thoughts.project_notes) {
       sections.push(`## Project Notes\n\n${thoughts.project_notes}`);
     }
-    
+
     if (thoughts.user_context) {
       sections.push(`## User Context\n\n${thoughts.user_context}`);
     }
-    
+
     if (thoughts.technical_insights) {
       sections.push(`## Technical Insights\n\n${thoughts.technical_insights}`);
     }
-    
+
     if (thoughts.world_knowledge) {
       sections.push(`## World Knowledge\n\n${thoughts.world_knowledge}`);
     }

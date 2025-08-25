@@ -79,7 +79,7 @@ export class DatabaseJournalManager {
         resolve();
         return;
       }
-      
+
       this.db.close((err) => {
         if (err) {
           reject(new Error(`Failed to close database: ${err.message}`));
@@ -119,7 +119,7 @@ export class DatabaseJournalManager {
       'CREATE INDEX IF NOT EXISTS idx_journal_entries_agent_id ON journal_entries(agent_id)',
       'CREATE INDEX IF NOT EXISTS idx_journal_entries_visibility ON journal_entries(visibility_level)',
       'CREATE INDEX IF NOT EXISTS idx_journal_entries_date_string ON journal_entries(date_string)',
-      'CREATE INDEX IF NOT EXISTS idx_journal_entries_file_path ON journal_entries(file_path)'
+      'CREATE INDEX IF NOT EXISTS idx_journal_entries_file_path ON journal_entries(file_path)',
     ];
 
     for (const indexSQL of indexes) {
@@ -127,16 +127,23 @@ export class DatabaseJournalManager {
     }
   }
 
-  async checkEntryExists(filePath: string, timestamp: number, contentPreview: string): Promise<boolean> {
+  async checkEntryExists(
+    filePath: string,
+    timestamp: number,
+    contentPreview: string
+  ): Promise<boolean> {
     // Check for duplicates based on timestamp and content similarity (more robust than file path)
     // Allow for slight timestamp variations (within 1 minute = 60000ms)
     const timeWindow = 60000;
-    const existing = await this.getAsync(`
+    const existing = await this.getAsync(
+      `
       SELECT id FROM journal_entries 
       WHERE ABS(timestamp - ?) <= ? AND substr(content, 1, 200) = substr(?, 1, 200)
       LIMIT 1
-    `, [timestamp, timeWindow, contentPreview]);
-    
+    `,
+      [timestamp, timeWindow, contentPreview]
+    );
+
     return existing !== undefined;
   }
 
@@ -147,26 +154,35 @@ export class DatabaseJournalManager {
     const filePath = `${dateString}/${timeString}.md`;
 
     const formattedEntry = this.formatEntry(content, timestamp);
-    
-    // Generate embedding
-    const embeddingData = await this.generateEmbeddingForContent(formattedEntry, timestamp, filePath);
 
-    await this.runAsync(`
+    // Generate embedding
+    const embeddingData = await this.generateEmbeddingForContent(
+      formattedEntry,
+      timestamp,
+      filePath
+    );
+
+    await this.runAsync(
+      `
       INSERT INTO journal_entries (
         content, timestamp, date_string, file_path, entry_type,
         embedding, searchable_text, sections, visibility_level
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      formattedEntry,
-      timestamp.getTime(),
-      dateString,
-      filePath,
-      'simple',
-      embeddingData.embedding ? Buffer.from(new Float32Array(embeddingData.embedding).buffer) : null,
-      embeddingData.text,
-      JSON.stringify(embeddingData.sections),
-      'private'
-    ]);
+    `,
+      [
+        formattedEntry,
+        timestamp.getTime(),
+        dateString,
+        filePath,
+        'simple',
+        embeddingData.embedding
+          ? Buffer.from(new Float32Array(embeddingData.embedding).buffer)
+          : null,
+        embeddingData.text,
+        JSON.stringify(embeddingData.sections),
+        'private',
+      ]
+    );
   }
 
   async writeThoughts(thoughts: {
@@ -180,13 +196,13 @@ export class DatabaseJournalManager {
     visibility_level?: VisibilityLevel;
   }): Promise<void> {
     const timestamp = new Date();
-    
+
     // Split thoughts into project-local and user-global, preserving agent metadata
-    const projectThoughts = { 
+    const projectThoughts = {
       project_notes: thoughts.project_notes,
       agent_id: thoughts.agent_id,
       model_id: thoughts.model_id,
-      visibility_level: thoughts.visibility_level || 'private'
+      visibility_level: thoughts.visibility_level || 'private',
     };
     const userThoughts = {
       feelings: thoughts.feelings,
@@ -195,17 +211,17 @@ export class DatabaseJournalManager {
       world_knowledge: thoughts.world_knowledge,
       agent_id: thoughts.agent_id,
       model_id: thoughts.model_id,
-      visibility_level: thoughts.visibility_level || 'private'
+      visibility_level: thoughts.visibility_level || 'private',
     };
-    
+
     // Write project notes if present
     if (projectThoughts.project_notes) {
       await this.writeThoughtsToDatabase(projectThoughts, timestamp, 'project');
     }
-    
+
     // Write user thoughts if present
-    const hasUserContent = Object.values(userThoughts).some(value => 
-      value !== undefined && typeof value === 'string'
+    const hasUserContent = Object.values(userThoughts).some(
+      (value) => value !== undefined && typeof value === 'string'
     );
     if (hasUserContent) {
       await this.writeThoughtsToDatabase(userThoughts, timestamp, 'user');
@@ -231,29 +247,38 @@ export class DatabaseJournalManager {
     const filePath = `${type}/${dateString}/${timeString}.md`;
 
     const formattedEntry = this.formatThoughts(thoughts, timestamp);
-    
-    // Generate embedding
-    const embeddingData = await this.generateEmbeddingForContent(formattedEntry, timestamp, filePath);
 
-    await this.runAsync(`
+    // Generate embedding
+    const embeddingData = await this.generateEmbeddingForContent(
+      formattedEntry,
+      timestamp,
+      filePath
+    );
+
+    await this.runAsync(
+      `
       INSERT INTO journal_entries (
         content, timestamp, date_string, file_path, entry_type,
         agent_id, model_id, visibility_level,
         embedding, searchable_text, sections
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `, [
-      formattedEntry,
-      timestamp.getTime(),
-      dateString,
-      filePath,
-      'thoughts',
-      thoughts.agent_id || null,
-      thoughts.model_id || null,
-      thoughts.visibility_level || 'private',
-      embeddingData.embedding ? Buffer.from(new Float32Array(embeddingData.embedding).buffer) : null,
-      embeddingData.text,
-      JSON.stringify(embeddingData.sections)
-    ]);
+    `,
+      [
+        formattedEntry,
+        timestamp.getTime(),
+        dateString,
+        filePath,
+        'thoughts',
+        thoughts.agent_id || null,
+        thoughts.model_id || null,
+        thoughts.visibility_level || 'private',
+        embeddingData.embedding
+          ? Buffer.from(new Float32Array(embeddingData.embedding).buffer)
+          : null,
+        embeddingData.text,
+        JSON.stringify(embeddingData.sections),
+      ]
+    );
   }
 
   private async generateEmbeddingForContent(
@@ -263,25 +288,25 @@ export class DatabaseJournalManager {
   ): Promise<EmbeddingData> {
     try {
       const { text, sections } = this.embeddingService.extractSearchableText(content);
-      
+
       if (text.trim().length === 0) {
         return {
           embedding: [],
           text: '',
           sections: [],
           timestamp: timestamp.getTime(),
-          path: filePath
+          path: filePath,
         };
       }
 
       const embedding = await this.embeddingService.generateEmbedding(text);
-      
+
       return {
         embedding,
         text,
         sections,
         timestamp: timestamp.getTime(),
-        path: filePath
+        path: filePath,
       };
     } catch (error) {
       console.error(`Failed to generate embedding for ${filePath}:`, error);
@@ -290,7 +315,7 @@ export class DatabaseJournalManager {
         text: '',
         sections: [],
         timestamp: timestamp.getTime(),
-        path: filePath
+        path: filePath,
       };
     }
   }
@@ -307,21 +332,23 @@ export class DatabaseJournalManager {
     const hours = String(date.getHours()).padStart(2, '0');
     const minutes = String(date.getMinutes()).padStart(2, '0');
     const seconds = String(date.getSeconds()).padStart(2, '0');
-    const microseconds = String(date.getMilliseconds() * 1000 + Math.floor(Math.random() * 1000)).padStart(6, '0');
+    const microseconds = String(
+      date.getMilliseconds() * 1000 + Math.floor(Math.random() * 1000)
+    ).padStart(6, '0');
     return `${hours}-${minutes}-${seconds}-${microseconds}`;
   }
 
   private formatEntry(content: string, timestamp: Date): string {
-    const timeDisplay = timestamp.toLocaleTimeString('en-US', { 
-      hour12: true, 
-      hour: 'numeric', 
-      minute: '2-digit', 
-      second: '2-digit' 
+    const timeDisplay = timestamp.toLocaleTimeString('en-US', {
+      hour12: true,
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
     });
-    const dateDisplay = timestamp.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    const dateDisplay = timestamp.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
     });
 
     return `---
@@ -334,46 +361,49 @@ ${content}
 `;
   }
 
-  private formatThoughts(thoughts: {
-    feelings?: string;
-    project_notes?: string;
-    user_context?: string;
-    technical_insights?: string;
-    world_knowledge?: string;
-    agent_id?: string;
-    model_id?: string;
-    visibility_level?: VisibilityLevel;
-  }, timestamp: Date): string {
-    const timeDisplay = timestamp.toLocaleTimeString('en-US', { 
-      hour12: true, 
-      hour: 'numeric', 
-      minute: '2-digit', 
-      second: '2-digit' 
+  private formatThoughts(
+    thoughts: {
+      feelings?: string;
+      project_notes?: string;
+      user_context?: string;
+      technical_insights?: string;
+      world_knowledge?: string;
+      agent_id?: string;
+      model_id?: string;
+      visibility_level?: VisibilityLevel;
+    },
+    timestamp: Date
+  ): string {
+    const timeDisplay = timestamp.toLocaleTimeString('en-US', {
+      hour12: true,
+      hour: 'numeric',
+      minute: '2-digit',
+      second: '2-digit',
     });
-    const dateDisplay = timestamp.toLocaleDateString('en-US', { 
-      year: 'numeric', 
-      month: 'long', 
-      day: 'numeric' 
+    const dateDisplay = timestamp.toLocaleDateString('en-US', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
     });
 
     const sections = [];
-    
+
     if (thoughts.feelings) {
       sections.push(`## Feelings\n\n${thoughts.feelings}`);
     }
-    
+
     if (thoughts.project_notes) {
       sections.push(`## Project Notes\n\n${thoughts.project_notes}`);
     }
-    
+
     if (thoughts.user_context) {
       sections.push(`## User Context\n\n${thoughts.user_context}`);
     }
-    
+
     if (thoughts.technical_insights) {
       sections.push(`## Technical Insights\n\n${thoughts.technical_insights}`);
     }
-    
+
     if (thoughts.world_knowledge) {
       sections.push(`## World Knowledge\n\n${thoughts.world_knowledge}`);
     }
@@ -392,17 +422,11 @@ ${sections.join('\n\n')}
   }
 
   async searchBySimilarity(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
-    const {
-      limit = 10,
-      agent_id,
-      model_id,
-      visibility_level,
-      accessible_to_agent
-    } = options;
+    const { limit = 10, agent_id, model_id, visibility_level, accessible_to_agent } = options;
 
     // Generate embedding for query
     const queryEmbedding = await this.embeddingService.generateEmbedding(query);
-    
+
     // Build WHERE clauses for filtering
     const whereClauses: string[] = ['embedding IS NOT NULL'];
     const params: any[] = [];
@@ -434,7 +458,7 @@ ${sections.join('\n\n')}
     }
 
     const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-    
+
     const sql = `
       SELECT id, content, timestamp, file_path, agent_id, model_id, 
              visibility_level, entry_type, searchable_text, sections, embedding
@@ -444,18 +468,25 @@ ${sections.join('\n\n')}
     `;
 
     const rows = await this.allAsync(sql, params);
-    
+
     // Calculate similarity scores
     const results: SearchResult[] = [];
     for (const row of rows) {
       if (!row.embedding) continue;
-      
+
       try {
         // Convert Buffer back to number array
-        const embeddingArray = Array.from(new Float32Array(row.embedding.buffer, row.embedding.byteOffset, row.embedding.byteLength / 4));
+        const embeddingArray = Array.from(
+          new Float32Array(
+            row.embedding.buffer,
+            row.embedding.byteOffset,
+            row.embedding.byteLength / 4
+          )
+        );
         const score = this.embeddingService.cosineSimilarity(queryEmbedding, embeddingArray);
-        
-        if (score > 0.1) { // Minimum similarity threshold
+
+        if (score > 0.1) {
+          // Minimum similarity threshold
           results.push({
             id: row.id,
             content: row.content,
@@ -467,7 +498,7 @@ ${sections.join('\n\n')}
             entry_type: row.entry_type,
             score,
             searchable_text: row.searchable_text,
-            sections: row.sections ? JSON.parse(row.sections) : []
+            sections: row.sections ? JSON.parse(row.sections) : [],
           });
         }
       } catch (error) {
@@ -477,9 +508,7 @@ ${sections.join('\n\n')}
     }
 
     // Sort by similarity score (descending) and limit results
-    return results
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+    return results.sort((a, b) => b.score - a.score).slice(0, limit);
   }
 
   async listRecent(options: SearchOptions = {}): Promise<SearchResult[]> {
@@ -489,7 +518,7 @@ ${sections.join('\n\n')}
       model_id,
       visibility_level,
       accessible_to_agent,
-      dateRange
+      dateRange,
     } = options;
 
     // Build WHERE clauses for filtering
@@ -533,7 +562,7 @@ ${sections.join('\n\n')}
     }
 
     const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
-    
+
     const sql = `
       SELECT id, content, timestamp, file_path, agent_id, model_id, 
              visibility_level, entry_type, searchable_text, sections
@@ -545,8 +574,8 @@ ${sections.join('\n\n')}
 
     params.push(limit);
     const rows = await this.allAsync(sql, params);
-    
-    return rows.map(row => ({
+
+    return rows.map((row) => ({
       id: row.id,
       content: row.content,
       timestamp: new Date(row.timestamp),
@@ -557,17 +586,20 @@ ${sections.join('\n\n')}
       entry_type: row.entry_type,
       score: 1, // No similarity score for recent entries
       searchable_text: row.searchable_text,
-      sections: row.sections ? JSON.parse(row.sections) : []
+      sections: row.sections ? JSON.parse(row.sections) : [],
     }));
   }
 
   async readEntryByPath(filePath: string): Promise<string | null> {
-    const row = await this.getAsync(`
+    const row = await this.getAsync(
+      `
       SELECT content FROM journal_entries 
       WHERE file_path = ?
       LIMIT 1
-    `, [filePath]);
-    
+    `,
+      [filePath]
+    );
+
     return row ? row.content : null;
   }
 
@@ -577,16 +609,18 @@ ${sections.join('\n\n')}
   }
 
   async getIndexes(): Promise<any[]> {
-    return this.allAsync(`SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='journal_entries'`);
+    return this.allAsync(
+      `SELECT name FROM sqlite_master WHERE type='index' AND tbl_name='journal_entries'`
+    );
   }
 
   async getAllEntries(): Promise<DatabaseEntry[]> {
     const rows = await this.allAsync('SELECT * FROM journal_entries ORDER BY timestamp DESC');
-    return rows.map(row => ({
+    return rows.map((row) => ({
       ...row,
       timestamp: new Date(row.timestamp),
       created_at: new Date(row.created_at * 1000),
-      sections: row.sections ? JSON.parse(row.sections) : []
+      sections: row.sections ? JSON.parse(row.sections) : [],
     }));
   }
 }

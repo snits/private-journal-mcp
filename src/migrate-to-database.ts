@@ -25,7 +25,7 @@ async function parseArgs(): Promise<MigrationConfig> {
     databasePath: path.join(resolveUserJournalPath(), 'journal.db'),
     batchSize: 50,
     continueOnError: true,
-    dryRun: false
+    dryRun: false,
   };
 
   for (let i = 0; i < args.length; i++) {
@@ -102,7 +102,7 @@ Examples:
 
 async function checkPaths(config: MigrationConfig): Promise<void> {
   console.log('🔍 Checking source paths...');
-  
+
   try {
     await fs.access(config.projectPath);
     console.log(`✅ Project path found: ${config.projectPath}`);
@@ -150,11 +150,7 @@ async function main(): Promise<void> {
     console.log('✅ Database initialized');
 
     // Initialize migration service
-    const migrationService = new MigrationService(
-      config.projectPath,
-      config.userPath,
-      dbManager
-    );
+    const migrationService = new MigrationService(config.projectPath, config.userPath, dbManager);
 
     // Discover entries
     console.log('\n🔍 Discovering journal entries...');
@@ -168,14 +164,14 @@ async function main(): Promise<void> {
     }
 
     // Show breakdown
-    const projectEntries = discoveredEntries.filter(e => e.type === 'project');
-    const userEntries = discoveredEntries.filter(e => e.type === 'user');
+    const projectEntries = discoveredEntries.filter((e) => e.type === 'project');
+    const userEntries = discoveredEntries.filter((e) => e.type === 'user');
     console.log(`   📁 Project entries: ${projectEntries.length}`);
     console.log(`   👤 User entries: ${userEntries.length}`);
 
     // Show agent breakdown
     const agentBreakdown = new Map<string, number>();
-    discoveredEntries.forEach(entry => {
+    discoveredEntries.forEach((entry) => {
       const agent = entry.metadata.agent_id || 'unknown';
       agentBreakdown.set(agent, (agentBreakdown.get(agent) || 0) + 1);
     });
@@ -194,7 +190,7 @@ async function main(): Promise<void> {
     console.log(`\n⚡ Ready to migrate ${discoveredEntries.length} entries to database.`);
     console.log('   This operation will copy all entries to the SQLite database.');
     console.log('   Original files will remain unchanged.');
-    
+
     // In a real CLI tool, you'd prompt for confirmation here
     // For now, we'll proceed automatically
     console.log('\n🚀 Starting migration...');
@@ -202,22 +198,25 @@ async function main(): Promise<void> {
     // Track progress
     let lastProgressTime = Date.now();
     const startTime = Date.now();
-    
+
     const result = await migrationService.migrateEntries(discoveredEntries, {
       batchSize: config.batchSize,
       continueOnError: config.continueOnError,
       onProgress: (processed: number, total: number) => {
         const now = Date.now();
-        if (now - lastProgressTime > 1000 || processed === total) { // Update every second
+        if (now - lastProgressTime > 1000 || processed === total) {
+          // Update every second
           const percentage = Math.round((processed / total) * 100);
           const elapsed = Math.round((now - startTime) / 1000);
           const rate = processed / elapsed;
           const eta = Math.round((total - processed) / rate);
-          
-          console.log(`📈 Progress: ${processed}/${total} (${percentage}%) - ${rate.toFixed(1)}/sec - ETA: ${eta}s`);
+
+          console.log(
+            `📈 Progress: ${processed}/${total} (${percentage}%) - ${rate.toFixed(1)}/sec - ETA: ${eta}s`
+          );
           lastProgressTime = now;
         }
-      }
+      },
     });
 
     // Report results
@@ -229,18 +228,18 @@ async function main(): Promise<void> {
     console.log(`❌ Failed: ${result.failedCount}`);
     console.log(`⚠️  Warnings: ${result.warningCount}`);
     console.log(`⏱️  Duration: ${(result.duration / 1000).toFixed(1)}s`);
-    
+
     if (result.warnings.length > 0) {
       console.log('\n⚠️  Warnings:');
-      result.warnings.slice(0, 10).forEach(warning => console.log(`   ${warning}`));
+      result.warnings.slice(0, 10).forEach((warning) => console.log(`   ${warning}`));
       if (result.warnings.length > 10) {
         console.log(`   ... and ${result.warnings.length - 10} more warnings`);
       }
     }
-    
+
     if (result.errors.length > 0) {
       console.log('\n❌ Errors:');
-      result.errors.slice(0, 5).forEach(error => console.log(`   ${error}`));
+      result.errors.slice(0, 5).forEach((error) => console.log(`   ${error}`));
       if (result.errors.length > 5) {
         console.log(`   ... and ${result.errors.length - 5} more errors`);
       }
@@ -256,7 +255,6 @@ async function main(): Promise<void> {
     }
 
     await dbManager.close();
-    
   } catch (error) {
     console.error('\n💥 Migration failed:', error instanceof Error ? error.message : error);
     process.exit(1);
@@ -265,7 +263,7 @@ async function main(): Promise<void> {
 
 // Add npm script command to package.json
 if (require.main === module) {
-  main().catch(error => {
+  main().catch((error) => {
     console.error('Fatal error:', error);
     process.exit(1);
   });

@@ -19,10 +19,10 @@ export interface JournalEntry {
   content: string;
   timestamp: Date;
   filePath: string;
-  agent_id?: string;        // e.g., "code-reviewer", "debug-specialist", "claude-general"
-  model_id?: string;        // e.g., "claude-sonnet-4", "gpt-4o", "gemini-2.0-pro"
+  agent_id?: string; // e.g., "code-reviewer", "debug-specialist", "claude-general"
+  model_id?: string; // e.g., "claude-sonnet-4", "gpt-4o", "gemini-2.0-pro"
   visibility_level?: VisibilityLevel;
-  project_context?: ProjectContext;  // Automatic project metadata for context isolation
+  project_context?: ProjectContext; // Automatic project metadata for context isolation
 }
 
 export interface ProcessThoughtsRequest {
@@ -34,7 +34,7 @@ export interface ProcessThoughtsRequest {
   agent_id?: string;
   model_id?: string;
   visibility_level?: VisibilityLevel;
-  project_context?: ProjectContext;  // Optional override for project context
+  project_context?: ProjectContext; // Optional override for project context
 }
 
 export interface SearchOptions {
@@ -44,16 +44,16 @@ export interface SearchOptions {
   agent_id?: string;
   model_id?: string;
   visibility_level?: VisibilityLevel;
-  accessible_to_agent?: string;  // Filter by what this agent can see
+  accessible_to_agent?: string; // Filter by what this agent can see
   dateRange?: {
     start?: Date;
     end?: Date;
   };
   // Project context filtering
-  project_filter?: 'current' | 'all' | string | string[];  // 'current', 'all', or specific project names
-  language_filter?: string;      // Filter by primary language
-  exclude_current?: boolean;     // Exclude current project from results
-  min_relevance?: number;        // Minimum relevance score for cross-project results
+  project_filter?: 'current' | 'all' | string | string[]; // 'current', 'all', or specific project names
+  language_filter?: string; // Filter by primary language
+  exclude_current?: boolean; // Exclude current project from results
+  min_relevance?: number; // Minimum relevance score for cross-project results
 }
 
 // Database types matching SQLite schema
@@ -73,7 +73,7 @@ export interface DatabaseEntry {
   created_at: Date;
   // Project context fields
   project_name?: string;
-  project_context?: string;  // JSON-serialized ProjectContext
+  project_context?: string; // JSON-serialized ProjectContext
 }
 
 export interface SearchResult {

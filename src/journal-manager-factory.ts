@@ -37,11 +37,11 @@ export class JournalManagerFactory {
   static getManagerType(): JournalManagerType {
     // Check environment variable to determine backend type
     const backend = process.env.JOURNAL_BACKEND?.toLowerCase();
-    
+
     if (backend === 'postgresql' || backend === 'postgres') {
       return 'postgresql';
     }
-    
+
     // Default to SQLite for backward compatibility
     return 'sqlite';
   }

@@ -6,9 +6,9 @@ import { SearchOptions, ProjectContext } from './private-journal-types';
 import { ProjectContextDetector } from './project-context';
 
 export interface ProjectAwareSearchResult extends SearchResult {
-  context_match: number;          // Relevance score for current project context
+  context_match: number; // Relevance score for current project context
   cross_project_warning: boolean; // True if result is from different project
-  project_name?: string;          // Project this result came from
+  project_name?: string; // Project this result came from
   context_confidence: 'high' | 'medium' | 'low';
 }
 
@@ -33,16 +33,19 @@ export class ProjectAwareSearchService {
    */
   async search(query: string, options: SearchOptions = {}): Promise<ProjectAwareSearchResult[]> {
     // Get current project context
-    const currentProject = options.project_filter === 'current' ? 
-      await this.contextDetector.detectProjectContext() : 
-      this.currentContext || await this.contextDetector.detectProjectContext();
-    
+    const currentProject =
+      options.project_filter === 'current'
+        ? await this.contextDetector.detectProjectContext()
+        : this.currentContext || (await this.contextDetector.detectProjectContext());
+
     this.currentContext = currentProject;
 
     // Handle explicit project filtering
-    if (typeof options.project_filter === 'string' && 
-        options.project_filter !== 'current' && 
-        options.project_filter !== 'all') {
+    if (
+      typeof options.project_filter === 'string' &&
+      options.project_filter !== 'current' &&
+      options.project_filter !== 'all'
+    ) {
       return await this.searchSpecificProject(query, options.project_filter, options);
     }
 
@@ -58,8 +61,8 @@ export class ProjectAwareSearchService {
    * Implements the intelligent search strategy from the design document
    */
   private async searchWithProjectAwareFallback(
-    query: string, 
-    currentProject: ProjectContext, 
+    query: string,
+    currentProject: ProjectContext,
     options: SearchOptions
   ): Promise<ProjectAwareSearchResult[]> {
     const allResults: ProjectAwareSearchResult[] = [];
@@ -68,7 +71,7 @@ export class ProjectAwareSearchService {
     // Phase 1: Current project search (highest relevance)
     const currentProjectResults = await this.searchCurrentProject(query, currentProject, {
       ...options,
-      limit: Math.max(targetLimit, 5) // Get at least 5 for good coverage
+      limit: Math.max(targetLimit, 5), // Get at least 5 for good coverage
     });
     allResults.push(...currentProjectResults);
 
@@ -76,12 +79,12 @@ export class ProjectAwareSearchService {
     if (allResults.length < 3) {
       const relatedProjects = this.detectRelatedProjects(currentProject);
       const relatedResults = await this.searchRelatedProjects(
-        query, 
-        relatedProjects, 
-        currentProject, 
+        query,
+        relatedProjects,
+        currentProject,
         {
           ...options,
-          limit: targetLimit - allResults.length
+          limit: targetLimit - allResults.length,
         }
       );
       allResults.push(...relatedResults);
@@ -92,7 +95,7 @@ export class ProjectAwareSearchService {
       const globalResults = await this.searchGlobalWithRelevance(query, currentProject, {
         ...options,
         limit: targetLimit - allResults.length,
-        min_relevance: options.min_relevance || 0.6
+        min_relevance: options.min_relevance || 0.6,
       });
       allResults.push(...globalResults);
     }
@@ -105,17 +108,17 @@ export class ProjectAwareSearchService {
    * Search within current project context
    */
   private async searchCurrentProject(
-    query: string, 
-    currentProject: ProjectContext, 
+    query: string,
+    currentProject: ProjectContext,
     options: SearchOptions
   ): Promise<ProjectAwareSearchResult[]> {
     // This would integrate with the existing search service
     // For now, simulate project-filtered search
     const rawResults = await this.searchService.search(query, options);
-    
+
     return rawResults
-      .filter(result => this.matchesProject(result, currentProject.project))
-      .map(result => this.enhanceWithProjectContext(result, currentProject, 'current'));
+      .filter((result) => this.matchesProject(result, currentProject.project))
+      .map((result) => this.enhanceWithProjectContext(result, currentProject, 'current'));
   }
 
   /**
@@ -128,16 +131,16 @@ export class ProjectAwareSearchService {
     options: SearchOptions
   ): Promise<ProjectAwareSearchResult[]> {
     const results: ProjectAwareSearchResult[] = [];
-    
+
     for (const project of relatedProjects) {
       const projectResults = await this.searchSpecificProject(query, project, {
         ...options,
-        limit: Math.ceil((options.limit || 10) / relatedProjects.length)
+        limit: Math.ceil((options.limit || 10) / relatedProjects.length),
       });
       results.push(...projectResults);
     }
 
-    return results.map(result => 
+    return results.map((result) =>
       this.enhanceWithProjectContext(result, currentProject, 'related')
     );
   }
@@ -152,16 +155,17 @@ export class ProjectAwareSearchService {
   ): Promise<ProjectAwareSearchResult[]> {
     const rawResults = await this.searchService.search(query, {
       ...options,
-      type: 'both' // Search both project and user entries
+      type: 'both', // Search both project and user entries
     });
 
     const minRelevance = options.min_relevance || 0.6;
-    
+
     return rawResults
-      .filter(result => result.score >= minRelevance)
-      .map(result => this.enhanceWithProjectContext(result, currentProject, 'global'))
-      .filter(result => !options.exclude_current || 
-              result.project_name !== currentProject.project);
+      .filter((result) => result.score >= minRelevance)
+      .map((result) => this.enhanceWithProjectContext(result, currentProject, 'global'))
+      .filter(
+        (result) => !options.exclude_current || result.project_name !== currentProject.project
+      );
   }
 
   /**
@@ -173,10 +177,10 @@ export class ProjectAwareSearchService {
     options: SearchOptions
   ): Promise<ProjectAwareSearchResult[]> {
     const rawResults = await this.searchService.search(query, options);
-    
+
     return rawResults
-      .filter(result => this.matchesProject(result, projectName))
-      .map(result => this.enhanceWithProjectContext(result, null, 'specific'));
+      .filter((result) => this.matchesProject(result, projectName))
+      .map((result) => this.enhanceWithProjectContext(result, null, 'specific'));
   }
 
   /**
@@ -188,11 +192,11 @@ export class ProjectAwareSearchService {
     options: SearchOptions
   ): Promise<ProjectAwareSearchResult[]> {
     const results: ProjectAwareSearchResult[] = [];
-    
+
     for (const project of projectNames) {
       const projectResults = await this.searchSpecificProject(query, project, {
         ...options,
-        limit: Math.ceil((options.limit || 10) / projectNames.length)
+        limit: Math.ceil((options.limit || 10) / projectNames.length),
       });
       results.push(...projectResults);
     }
@@ -209,7 +213,7 @@ export class ProjectAwareSearchService {
     // - Similar tech stack indicators
     // - Shared architectural patterns
     // - Same git organization/user
-    
+
     // For now, return empty array - would be implemented with actual project analysis
     return [];
   }
@@ -220,8 +224,10 @@ export class ProjectAwareSearchService {
   private matchesProject(result: SearchResult, projectName: string): boolean {
     // This would check the result's project context metadata
     // For now, simulate based on path patterns
-    return result.path.includes(projectName) || 
-           result.text.toLowerCase().includes(projectName.toLowerCase());
+    return (
+      result.path.includes(projectName) ||
+      result.text.toLowerCase().includes(projectName.toLowerCase())
+    );
   }
 
   /**
@@ -237,7 +243,7 @@ export class ProjectAwareSearchService {
       context_match: this.calculateContextRelevance(result, currentProject, searchType),
       cross_project_warning: searchType !== 'current' && currentProject !== null,
       project_name: this.extractProjectName(result),
-      context_confidence: this.determineContextConfidence(result, searchType)
+      context_confidence: this.determineContextConfidence(result, searchType),
     };
 
     return enhanced;
@@ -275,9 +281,7 @@ export class ProjectAwareSearchService {
     // This would parse the project context from the result metadata
     // For now, extract from path
     const pathParts = result.path.split('/');
-    const possibleProject = pathParts.find(part => 
-      !part.includes('.') && part.length > 2
-    );
+    const possibleProject = pathParts.find((part) => !part.includes('.') && part.length > 2);
     return possibleProject || 'unknown';
   }
 
@@ -316,7 +320,7 @@ export class ProjectAwareSearchService {
         if (Math.abs(contextDiff) > 0.1) {
           return contextDiff;
         }
-        
+
         // Secondary sort: original search score
         return b.score - a.score;
       })

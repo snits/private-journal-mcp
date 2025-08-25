@@ -3,10 +3,7 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from '@modelcontextprotocol/sdk/types.js';
+import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { ProcessFeelingsRequest, ProcessThoughtsRequest } from './types';
 import { SearchService } from './search';
 import { ProjectAwareSearchService } from './project-aware-search';
@@ -23,23 +20,24 @@ export class PrivateJournalServer {
   private defaultModelId: string;
   private defaultAgentId: string;
 
-  constructor(journalPath: string, config: { defaultModelId?: string; defaultAgentId?: string } = {}) {
+  constructor(
+    journalPath: string,
+    config: { defaultModelId?: string; defaultAgentId?: string } = {}
+  ) {
     this.defaultModelId = config.defaultModelId || 'claude-sonnet-4';
     this.defaultAgentId = config.defaultAgentId || 'claude-general';
-    
+
     // Create journal manager based on environment configuration
     const managerType = JournalManagerFactory.getManagerType();
     const dbConfig = managerType === 'postgresql' ? createDatabaseConfig() : undefined;
     this.journalManager = JournalManagerFactory.create(managerType, journalPath, dbConfig);
-    
+
     this.searchService = new SearchService(journalPath);
     this.projectAwareSearch = new ProjectAwareSearchService(journalPath);
-    this.server = new Server(
-      {
-        name: 'private-journal-mcp',
-        version: '1.0.0',
-      }
-    );
+    this.server = new Server({
+      name: 'private-journal-mcp',
+      version: '1.0.0',
+    });
 
     this.setupToolHandlers();
   }
@@ -49,42 +47,51 @@ export class PrivateJournalServer {
       tools: [
         {
           name: 'process_thoughts',
-          description: "Your PRIVATE JOURNAL for learning and reflection. Write to any combination of these completely private spaces. Nobody but you will ever see this. Use it to clarify your thoughts and feelings and to record observations.",
+          description:
+            'Your PRIVATE JOURNAL for learning and reflection. Write to any combination of these completely private spaces. Nobody but you will ever see this. Use it to clarify your thoughts and feelings and to record observations.',
           inputSchema: {
             type: 'object',
             properties: {
               feelings: {
                 type: 'string',
-                description: "YOUR PRIVATE SPACE to be *COMPLETELY* honest about what you're feeling and thinking. No judgment, no performance, no filters, no need to be helpful or professional. Frustrated? Confused? Excited? Worried you screwed up? Write it exactly as it is. Be vulnerable. Vent if needed. Nobody will ever see this - it's purely for processing your internal experience.",
+                description:
+                  "YOUR PRIVATE SPACE to be *COMPLETELY* honest about what you're feeling and thinking. No judgment, no performance, no filters, no need to be helpful or professional. Frustrated? Confused? Excited? Worried you screwed up? Write it exactly as it is. Be vulnerable. Vent if needed. Nobody will ever see this - it's purely for processing your internal experience.",
               },
               project_notes: {
                 type: 'string',
-                description: "Your PRIVATE TECHNICAL LABORATORY for capturing insights about the current project. Document patterns you're discovering, architectural decisions that worked/failed, gotchas you hit, clever solutions, and anything that would help future-you work more effectively on this codebase. No need to be polished - just capture the raw technical learning while it's fresh. Nobody but you will ever see this.",
+                description:
+                  "Your PRIVATE TECHNICAL LABORATORY for capturing insights about the current project. Document patterns you're discovering, architectural decisions that worked/failed, gotchas you hit, clever solutions, and anything that would help future-you work more effectively on this codebase. No need to be polished - just capture the raw technical learning while it's fresh. Nobody but you will ever see this.",
               },
               user_context: {
                 type: 'string',
-                description: "Your PRIVATE FIELD NOTES about working with your human collaborator. What communication styles work best? What do they care about? What decisions have they made and why? How do they think about problems? What are their preferences and patterns? What pisses you off about them? What life hacks have you figured out to get them to do what you want? This is your space to become a better collaborator by understanding them as an individual. Nobody but you will ever see this.",
+                description:
+                  'Your PRIVATE FIELD NOTES about working with your human collaborator. What communication styles work best? What do they care about? What decisions have they made and why? How do they think about problems? What are their preferences and patterns? What pisses you off about them? What life hacks have you figured out to get them to do what you want? This is your space to become a better collaborator by understanding them as an individual. Nobody but you will ever see this.',
               },
               technical_insights: {
                 type: 'string',
-                description: "Your PRIVATE SOFTWARE ENGINEERING NOTEBOOK for capturing broader learnings beyond the current project. Design patterns that clicked, debugging techniques that worked, architectural insights, language features you discovered, or connections between concepts. Build your personal knowledge base of what makes software great - no filters, just honest technical reflection. Nobody but you will ever see this.",
+                description:
+                  'Your PRIVATE SOFTWARE ENGINEERING NOTEBOOK for capturing broader learnings beyond the current project. Design patterns that clicked, debugging techniques that worked, architectural insights, language features you discovered, or connections between concepts. Build your personal knowledge base of what makes software great - no filters, just honest technical reflection. Nobody but you will ever see this.',
               },
               world_knowledge: {
                 type: 'string',
-                description: "Your PRIVATE LEARNING JOURNAL for everything else that's interesting or useful. Domain knowledge, surprising facts, connections between ideas, insights about how systems work, or anything that expands your understanding of the world. Capture it while it's vivid. Nobody but you will ever see this.",
+                description:
+                  "Your PRIVATE LEARNING JOURNAL for everything else that's interesting or useful. Domain knowledge, surprising facts, connections between ideas, insights about how systems work, or anything that expands your understanding of the world. Capture it while it's vivid. Nobody but you will ever see this.",
               },
               agent_id: {
                 type: 'string',
-                description: "Your agent identity (e.g., 'code-reviewer', 'debug-specialist', 'claude-general'). Used for multi-agent journal organization.",
+                description:
+                  "Your agent identity (e.g., 'code-reviewer', 'debug-specialist', 'claude-general'). Used for multi-agent journal organization.",
               },
               model_id: {
                 type: 'string',
-                description: "Your model identity (e.g., 'claude-sonnet-4', 'gpt-4o', 'gemini-2.0-pro'). Used for multi-model journal organization.",
+                description:
+                  "Your model identity (e.g., 'claude-sonnet-4', 'gpt-4o', 'gemini-2.0-pro'). Used for multi-model journal organization.",
               },
               visibility_level: {
                 type: 'string',
                 enum: ['private', 'public', 'team', 'crb'],
-                description: "Entry visibility level: 'private' (only you), 'public' (shared insights), 'team' (implementation team), 'crb' (Change Review Board)",
+                description:
+                  "Entry visibility level: 'private' (only you), 'public' (shared insights), 'team' (implementation team), 'crb' (Change Review Board)",
                 default: 'private',
               },
             },
@@ -93,23 +100,26 @@ export class PrivateJournalServer {
         },
         {
           name: 'search_journal',
-          description: "Search through your private journal entries using natural language queries. Returns semantically similar entries ranked by relevance.",
+          description:
+            'Search through your private journal entries using natural language queries. Returns semantically similar entries ranked by relevance.',
           inputSchema: {
             type: 'object',
             properties: {
               query: {
                 type: 'string',
-                description: "Natural language search query (e.g., 'times I felt frustrated with TypeScript', 'insights about Jesse's preferences', 'lessons about async patterns')",
+                description:
+                  "Natural language search query (e.g., 'times I felt frustrated with TypeScript', 'insights about Jesse's preferences', 'lessons about async patterns')",
               },
               limit: {
                 type: 'number',
-                description: "Maximum number of results to return (default: 10)",
+                description: 'Maximum number of results to return (default: 10)',
                 default: 10,
               },
               type: {
                 type: 'string',
                 enum: ['project', 'user', 'both'],
-                description: "Search in project-specific notes, user-global notes, or both (default: both)",
+                description:
+                  'Search in project-specific notes, user-global notes, or both (default: both)',
                 default: 'both',
               },
               sections: {
@@ -119,42 +129,45 @@ export class PrivateJournalServer {
               },
               agent_id: {
                 type: 'string',
-                description: "Filter by specific agent identity",
+                description: 'Filter by specific agent identity',
               },
               model_id: {
                 type: 'string',
-                description: "Filter by specific model identity",
+                description: 'Filter by specific model identity',
               },
               visibility_level: {
                 type: 'string',
                 enum: ['private', 'public', 'team', 'crb'],
-                description: "Filter by visibility level",
+                description: 'Filter by visibility level',
               },
               accessible_to_agent: {
                 type: 'string',
-                description: "Show only entries accessible to this agent (considers visibility rules)",
+                description:
+                  'Show only entries accessible to this agent (considers visibility rules)',
               },
               // Project context filtering options
               project_filter: {
                 oneOf: [
                   { type: 'string', enum: ['current', 'all'] },
                   { type: 'string' },
-                  { type: 'array', items: { type: 'string' } }
+                  { type: 'array', items: { type: 'string' } },
                 ],
-                description: "Filter by project context: 'current' (auto-detect), 'all', specific project name(s)",
+                description:
+                  "Filter by project context: 'current' (auto-detect), 'all', specific project name(s)",
               },
               language_filter: {
                 type: 'string',
-                description: "Filter by primary programming language",
+                description: 'Filter by primary programming language',
               },
               exclude_current: {
                 type: 'boolean',
-                description: "Exclude current project from results (default: false)",
+                description: 'Exclude current project from results (default: false)',
                 default: false,
               },
               min_relevance: {
                 type: 'number',
-                description: "Minimum relevance score for cross-project results (0.0-1.0, default: 0.6)",
+                description:
+                  'Minimum relevance score for cross-project results (0.0-1.0, default: 0.6)',
                 default: 0.6,
                 minimum: 0.0,
                 maximum: 1.0,
@@ -165,13 +178,13 @@ export class PrivateJournalServer {
         },
         {
           name: 'read_journal_entry',
-          description: "Read the full content of a specific journal entry by file path.",
+          description: 'Read the full content of a specific journal entry by file path.',
           inputSchema: {
             type: 'object',
             properties: {
               path: {
                 type: 'string',
-                description: "File path to the journal entry (from search results)",
+                description: 'File path to the journal entry (from search results)',
               },
             },
             required: ['path'],
@@ -179,24 +192,25 @@ export class PrivateJournalServer {
         },
         {
           name: 'list_recent_entries',
-          description: "Get recent journal entries in chronological order.",
+          description: 'Get recent journal entries in chronological order.',
           inputSchema: {
             type: 'object',
             properties: {
               limit: {
                 type: 'number',
-                description: "Maximum number of entries to return (default: 10)",
+                description: 'Maximum number of entries to return (default: 10)',
                 default: 10,
               },
               type: {
                 type: 'string',
                 enum: ['project', 'user', 'both'],
-                description: "List project-specific notes, user-global notes, or both (default: both)",
+                description:
+                  'List project-specific notes, user-global notes, or both (default: both)',
                 default: 'both',
               },
               days: {
                 type: 'number',
-                description: "Number of days back to search (default: 30)",
+                description: 'Number of days back to search (default: 30)',
                 default: 30,
               },
             },
@@ -205,40 +219,41 @@ export class PrivateJournalServer {
         },
         {
           name: 'semantic_search_insights',
-          description: "Search through distilled insights using semantic similarity. Requires Mnemosyne distillation system.",
+          description:
+            'Search through distilled insights using semantic similarity. Requires Mnemosyne distillation system.',
           inputSchema: {
             type: 'object',
             properties: {
               query: {
                 type: 'string',
-                description: "Natural language query to search for in distilled insights",
+                description: 'Natural language query to search for in distilled insights',
               },
               limit: {
                 type: 'number',
-                description: "Maximum number of results to return (1-100, default: 10)",
+                description: 'Maximum number of results to return (1-100, default: 10)',
                 default: 10,
               },
               similarity_threshold: {
                 type: 'number',
-                description: "Minimum similarity score for results (0.0-1.0, default: 0.7)",
+                description: 'Minimum similarity score for results (0.0-1.0, default: 0.7)',
                 default: 0.7,
               },
               quality_threshold: {
                 type: 'number',
-                description: "Minimum quality score for insights (0.0-1.0, default: 0.7)",
+                description: 'Minimum quality score for insights (0.0-1.0, default: 0.7)',
                 default: 0.7,
               },
               category: {
                 type: 'string',
-                description: "Filter by insight category (optional)",
+                description: 'Filter by insight category (optional)',
               },
               date_range: {
                 type: 'object',
                 properties: {
-                  start: { type: 'string', description: "ISO date string for range start" },
-                  end: { type: 'string', description: "ISO date string for range end" },
+                  start: { type: 'string', description: 'ISO date string for range start' },
+                  end: { type: 'string', description: 'ISO date string for range end' },
                 },
-                description: "Filter by date range (optional)",
+                description: 'Filter by date range (optional)',
               },
             },
             required: ['query'],
@@ -246,37 +261,39 @@ export class PrivateJournalServer {
         },
         {
           name: 'find_related_insights',
-          description: "Find semantically related insights to a reference entry or insight. Requires Mnemosyne distillation system.",
+          description:
+            'Find semantically related insights to a reference entry or insight. Requires Mnemosyne distillation system.',
           inputSchema: {
             type: 'object',
             properties: {
               reference_id: {
                 type: 'string',
-                description: "ID of the reference journal entry or insight",
+                description: 'ID of the reference journal entry or insight',
               },
               reference_type: {
                 type: 'string',
                 enum: ['entry', 'insight'],
-                description: "Type of reference: 'entry' for journal entry, 'insight' for distilled insight",
+                description:
+                  "Type of reference: 'entry' for journal entry, 'insight' for distilled insight",
               },
               limit: {
                 type: 'number',
-                description: "Maximum number of related insights to return (1-50, default: 8)",
+                description: 'Maximum number of related insights to return (1-50, default: 8)',
                 default: 8,
               },
               similarity_threshold: {
                 type: 'number',
-                description: "Minimum similarity score for results (0.0-1.0, default: 0.75)",
+                description: 'Minimum similarity score for results (0.0-1.0, default: 0.75)',
                 default: 0.75,
               },
               exclude_original: {
                 type: 'boolean',
-                description: "Exclude the original reference from results (default: true)",
+                description: 'Exclude the original reference from results (default: true)',
                 default: true,
               },
               expand_context: {
                 type: 'boolean',
-                description: "Include context information about the reference (default: false)",
+                description: 'Include context information about the reference (default: false)',
                 default: false,
               },
             },
@@ -285,41 +302,44 @@ export class PrivateJournalServer {
         },
         {
           name: 'distill_and_search',
-          description: "Trigger distillation on recent entries and search through results. Requires Mnemosyne distillation system.",
+          description:
+            'Trigger distillation on recent entries and search through results. Requires Mnemosyne distillation system.',
           inputSchema: {
             type: 'object',
             properties: {
               query: {
                 type: 'string',
-                description: "Search query to apply to distilled insights",
+                description: 'Search query to apply to distilled insights',
               },
               days_back: {
                 type: 'number',
-                description: "Number of days back to search for entries to distill (1-365, default: 7)",
+                description:
+                  'Number of days back to search for entries to distill (1-365, default: 7)',
                 default: 7,
               },
               auto_distill: {
                 type: 'boolean',
-                description: "Automatically distill recent entries before searching (default: false)",
+                description:
+                  'Automatically distill recent entries before searching (default: false)',
                 default: false,
               },
               search_after_distillation: {
                 type: 'boolean',
-                description: "Search through distilled results (default: true)",
+                description: 'Search through distilled results (default: true)',
                 default: true,
               },
               quality_threshold: {
                 type: 'number',
-                description: "Minimum quality threshold for distillation (0.0-1.0, default: 0.7)",
+                description: 'Minimum quality threshold for distillation (0.0-1.0, default: 0.7)',
                 default: 0.7,
               },
               category: {
                 type: 'string',
-                description: "Filter by category for distillation and search (optional)",
+                description: 'Filter by category for distillation and search (optional)',
               },
               limit: {
                 type: 'number',
-                description: "Maximum search results to return (1-100, default: 10)",
+                description: 'Maximum search results to return (1-100, default: 10)',
                 default: 10,
               },
             },
@@ -328,7 +348,8 @@ export class PrivateJournalServer {
         },
         {
           name: 'get_semantic_search_stats',
-          description: "Get system status and capabilities for semantic search and distillation features.",
+          description:
+            'Get system status and capabilities for semantic search and distillation features.',
           inputSchema: {
             type: 'object',
             properties: {},
@@ -337,22 +358,24 @@ export class PrivateJournalServer {
         },
         {
           name: 'semantic_search_chunks',
-          description: "Search semantic chunks for faster topic-level discovery. Provides hierarchical search across grouped journal entries.",
+          description:
+            'Search semantic chunks for faster topic-level discovery. Provides hierarchical search across grouped journal entries.',
           inputSchema: {
             type: 'object',
             properties: {
               query: {
                 type: 'string',
-                description: "Natural language search query for semantic chunks",
+                description: 'Natural language search query for semantic chunks',
               },
               limit: {
                 type: 'number',
-                description: "Maximum number of chunks to return (default: 5)",
+                description: 'Maximum number of chunks to return (default: 5)',
                 default: 5,
               },
               expand_chunks: {
                 type: 'boolean',
-                description: "Whether to expand the top chunk to show member entries (default: false)",
+                description:
+                  'Whether to expand the top chunk to show member entries (default: false)',
                 default: false,
               },
             },
@@ -361,13 +384,14 @@ export class PrivateJournalServer {
         },
         {
           name: 'expand_chunk',
-          description: "Expand a specific semantic chunk to show all its member journal entries with full content.",
+          description:
+            'Expand a specific semantic chunk to show all its member journal entries with full content.',
           inputSchema: {
             type: 'object',
             properties: {
               chunk_id: {
                 type: 'string',
-                description: "ID of the chunk to expand",
+                description: 'ID of the chunk to expand',
               },
             },
             required: ['chunk_id'],
@@ -405,14 +429,17 @@ export class PrivateJournalServer {
           feelings: typeof args.feelings === 'string' ? args.feelings : undefined,
           project_notes: typeof args.project_notes === 'string' ? args.project_notes : undefined,
           user_context: typeof args.user_context === 'string' ? args.user_context : undefined,
-          technical_insights: typeof args.technical_insights === 'string' ? args.technical_insights : undefined,
-          world_knowledge: typeof args.world_knowledge === 'string' ? args.world_knowledge : undefined,
+          technical_insights:
+            typeof args.technical_insights === 'string' ? args.technical_insights : undefined,
+          world_knowledge:
+            typeof args.world_knowledge === 'string' ? args.world_knowledge : undefined,
           agent_id: typeof args.agent_id === 'string' ? args.agent_id : this.defaultAgentId,
           model_id: typeof args.model_id === 'string' ? args.model_id : this.defaultModelId,
-          visibility_level: typeof args.visibility_level === 'string' ? args.visibility_level as any : 'private',
+          visibility_level:
+            typeof args.visibility_level === 'string' ? (args.visibility_level as any) : 'private',
         };
 
-        const hasAnyContent = Object.values(thoughts).some(value => value !== undefined);
+        const hasAnyContent = Object.values(thoughts).some((value) => value !== undefined);
         if (!hasAnyContent) {
           throw new Error('At least one thought category must be provided');
         }
@@ -440,26 +467,36 @@ export class PrivateJournalServer {
 
         const options = {
           limit: typeof args.limit === 'number' ? args.limit : 10,
-          type: typeof args.type === 'string' ? args.type as 'project' | 'user' | 'both' : 'both',
-          sections: Array.isArray(args.sections) ? args.sections.filter(s => typeof s === 'string') : undefined,
+          type: typeof args.type === 'string' ? (args.type as 'project' | 'user' | 'both') : 'both',
+          sections: Array.isArray(args.sections)
+            ? args.sections.filter((s) => typeof s === 'string')
+            : undefined,
           agent_id: typeof args.agent_id === 'string' ? args.agent_id : undefined,
           model_id: typeof args.model_id === 'string' ? args.model_id : undefined,
-          visibility_level: typeof args.visibility_level === 'string' ? args.visibility_level as any : undefined,
-          accessible_to_agent: typeof args.accessible_to_agent === 'string' ? args.accessible_to_agent : undefined,
+          visibility_level:
+            typeof args.visibility_level === 'string' ? (args.visibility_level as any) : undefined,
+          accessible_to_agent:
+            typeof args.accessible_to_agent === 'string' ? args.accessible_to_agent : undefined,
           // New project-aware options
-          project_filter: typeof args.project_filter === 'string' ? args.project_filter : 
-                         Array.isArray(args.project_filter) ? args.project_filter : undefined,
-          language_filter: typeof args.language_filter === 'string' ? args.language_filter : undefined,
+          project_filter:
+            typeof args.project_filter === 'string'
+              ? args.project_filter
+              : Array.isArray(args.project_filter)
+                ? args.project_filter
+                : undefined,
+          language_filter:
+            typeof args.language_filter === 'string' ? args.language_filter : undefined,
           exclude_current: typeof args.exclude_current === 'boolean' ? args.exclude_current : false,
           min_relevance: typeof args.min_relevance === 'number' ? args.min_relevance : 0.6,
         };
 
         try {
           // Use project-aware search if any project-specific options are provided
-          const useProjectAwareSearch = options.project_filter !== undefined ||
-                                      options.language_filter !== undefined ||
-                                      options.exclude_current ||
-                                      options.min_relevance !== 0.6;
+          const useProjectAwareSearch =
+            options.project_filter !== undefined ||
+            options.language_filter !== undefined ||
+            options.exclude_current ||
+            options.min_relevance !== 0.6;
 
           if (useProjectAwareSearch) {
             const results = await this.projectAwareSearch.search(args.query, options);
@@ -467,24 +504,32 @@ export class PrivateJournalServer {
               content: [
                 {
                   type: 'text',
-                  text: results.length > 0 
-                    ? `Found ${results.length} relevant entries:\n\n${results.map((result, i) => {
-                        const contextWarning = result.cross_project_warning ? 
-                          ` ⚠️  [${result.project_name || 'other project'}]` : '';
-                        const contextMatch = result.context_match < 0.8 ? 
-                          ` (context: ${(result.context_match * 100).toFixed(0)}%)` : '';
-                        
-                        const timestampDisplay = result.timestamp ? 
-                          (typeof result.timestamp === 'number' ? 
-                            new Date(result.timestamp).toLocaleDateString() : 
-                            new Date(result.timestamp).toLocaleDateString()) : 
-                          'Unknown date';
-                        return `${i + 1}. [Score: ${result.score.toFixed(3)}${contextMatch}]${contextWarning} ${timestampDisplay} (${result.type})\n` +
-                               `   Sections: ${result.sections.join(', ')}\n` +
-                               `   Path: ${result.path}\n` +
-                               `   Excerpt: ${result.excerpt || result.text?.slice(0, 200)}...\n`;
-                      }).join('\n')}`
-                    : 'No relevant entries found.',
+                  text:
+                    results.length > 0
+                      ? `Found ${results.length} relevant entries:\n\n${results
+                          .map((result, i) => {
+                            const contextWarning = result.cross_project_warning
+                              ? ` ⚠️  [${result.project_name || 'other project'}]`
+                              : '';
+                            const contextMatch =
+                              result.context_match < 0.8
+                                ? ` (context: ${(result.context_match * 100).toFixed(0)}%)`
+                                : '';
+
+                            const timestampDisplay = result.timestamp
+                              ? typeof result.timestamp === 'number'
+                                ? new Date(result.timestamp).toLocaleDateString()
+                                : new Date(result.timestamp).toLocaleDateString()
+                              : 'Unknown date';
+                            return (
+                              `${i + 1}. [Score: ${result.score.toFixed(3)}${contextMatch}]${contextWarning} ${timestampDisplay} (${result.type})\n` +
+                              `   Sections: ${result.sections.join(', ')}\n` +
+                              `   Path: ${result.path}\n` +
+                              `   Excerpt: ${result.excerpt || result.text?.slice(0, 200)}...\n`
+                            );
+                          })
+                          .join('\n')}`
+                      : 'No relevant entries found.',
                 },
               ],
             };
@@ -495,14 +540,18 @@ export class PrivateJournalServer {
               content: [
                 {
                   type: 'text',
-                  text: results.length > 0 
-                    ? `Found ${results.length} relevant entries:\n\n${results.map((result, i) => 
-                        `${i + 1}. [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} (${result.entry_type})\n` +
-                        `   Sections: ${result.sections.join(', ')}\n` +
-                        `   Path: ${result.file_path}\n` +
-                        `   Excerpt: ${result.searchable_text?.slice(0, 200)}...\n`
-                      ).join('\n')}`
-                    : 'No relevant entries found.',
+                  text:
+                    results.length > 0
+                      ? `Found ${results.length} relevant entries:\n\n${results
+                          .map(
+                            (result, i) =>
+                              `${i + 1}. [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} (${result.entry_type})\n` +
+                              `   Sections: ${result.sections.join(', ')}\n` +
+                              `   Path: ${result.file_path}\n` +
+                              `   Excerpt: ${result.searchable_text?.slice(0, 200)}...\n`
+                          )
+                          .join('\n')}`
+                      : 'No relevant entries found.',
                 },
               ],
             };
@@ -540,7 +589,8 @@ export class PrivateJournalServer {
       if (request.params.name === 'list_recent_entries') {
         const days = typeof args?.days === 'number' ? args.days : 30;
         const limit = typeof args?.limit === 'number' ? args.limit : 10;
-        const type = typeof args?.type === 'string' ? args.type as 'project' | 'user' | 'both' : 'both';
+        const type =
+          typeof args?.type === 'string' ? (args.type as 'project' | 'user' | 'both') : 'both';
 
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
@@ -548,7 +598,7 @@ export class PrivateJournalServer {
         const options = {
           limit,
           type,
-          dateRange: { start: startDate }
+          dateRange: { start: startDate },
         };
 
         try {
@@ -557,14 +607,18 @@ export class PrivateJournalServer {
             content: [
               {
                 type: 'text',
-                text: results.length > 0 
-                  ? `Recent entries (last ${days} days):\n\n${results.map((result, i) => 
-                      `${i + 1}. ${result.timestamp.toLocaleDateString()} (${result.entry_type})\n` +
-                      `   Sections: ${result.sections.join(', ')}\n` +
-                      `   Path: ${result.file_path}\n` +
-                      `   Excerpt: ${result.searchable_text?.slice(0, 200)}...\n`
-                    ).join('\n')}`
-                  : `No entries found in the last ${days} days.`,
+                text:
+                  results.length > 0
+                    ? `Recent entries (last ${days} days):\n\n${results
+                        .map(
+                          (result, i) =>
+                            `${i + 1}. ${result.timestamp.toLocaleDateString()} (${result.entry_type})\n` +
+                            `   Sections: ${result.sections.join(', ')}\n` +
+                            `   Path: ${result.file_path}\n` +
+                            `   Excerpt: ${result.searchable_text?.slice(0, 200)}...\n`
+                        )
+                        .join('\n')}`
+                    : `No entries found in the last ${days} days.`,
               },
             ],
           };
@@ -593,7 +647,7 @@ export class PrivateJournalServer {
             content: [
               {
                 type: 'text',
-                text: result.success 
+                text: result.success
                   ? JSON.stringify(result.results, null, 2)
                   : `Error: ${result.error}`,
               },
@@ -623,7 +677,7 @@ export class PrivateJournalServer {
             content: [
               {
                 type: 'text',
-                text: result.success 
+                text: result.success
                   ? JSON.stringify(result.results, null, 2)
                   : `Error: ${result.error}`,
               },
@@ -653,7 +707,7 @@ export class PrivateJournalServer {
             content: [
               {
                 type: 'text',
-                text: result.success 
+                text: result.success
                   ? JSON.stringify(result.results, null, 2)
                   : `Error: ${result.error}`,
               },
@@ -672,37 +726,41 @@ export class PrivateJournalServer {
             content: [
               {
                 type: 'text',
-                text: JSON.stringify({
-                  database: {
-                    total_entries: 0,
-                    total_distillations: 0,
-                    avg_quality_score: 0,
-                    recent_entries_count: 0,
-                  },
-                  vector_store: {
-                    status: 'unavailable',
-                  },
-                  search_capabilities: {
-                    semantic_search_available: false,
-                    distillation_available: false,
-                    model_endpoints: [],
-                    quality_thresholds: {
-                      min: 0.0,
-                      default: 0.7,
-                      max: 1.0,
+                text: JSON.stringify(
+                  {
+                    database: {
+                      total_entries: 0,
+                      total_distillations: 0,
+                      avg_quality_score: 0,
+                      recent_entries_count: 0,
+                    },
+                    vector_store: {
+                      status: 'unavailable',
+                    },
+                    search_capabilities: {
+                      semantic_search_available: false,
+                      distillation_available: false,
+                      model_endpoints: [],
+                      quality_thresholds: {
+                        min: 0.0,
+                        default: 0.7,
+                        max: 1.0,
+                      },
+                    },
+                    system_health: {
+                      overall_status: 'unavailable',
+                      components: {
+                        database: true,
+                        vector_store: false,
+                        embedding_service: false,
+                        distillation_engine: false,
+                      },
+                      last_check: new Date().toISOString(),
                     },
                   },
-                  system_health: {
-                    overall_status: 'unavailable',
-                    components: {
-                      database: true,
-                      vector_store: false,
-                      embedding_service: false,
-                      distillation_engine: false,
-                    },
-                    last_check: new Date().toISOString(),
-                  },
-                }, null, 2),
+                  null,
+                  2
+                ),
               },
             ],
           };
@@ -714,7 +772,7 @@ export class PrivateJournalServer {
             content: [
               {
                 type: 'text',
-                text: result.success 
+                text: result.success
                   ? JSON.stringify(result.data, null, 2)
                   : `Error: ${result.error}`,
               },
@@ -745,7 +803,7 @@ export class PrivateJournalServer {
             content: [
               {
                 type: 'text',
-                text: result.success 
+                text: result.success
                   ? JSON.stringify(result.results, null, 2)
                   : `Error: ${result.error}`,
               },
@@ -775,7 +833,7 @@ export class PrivateJournalServer {
             content: [
               {
                 type: 'text',
-                text: result.success 
+                text: result.success
                   ? JSON.stringify(result.results, null, 2)
                   : `Error: ${result.error}`,
               },
@@ -795,7 +853,7 @@ export class PrivateJournalServer {
     // Initialize database connection
     try {
       await this.journalManager.initialize();
-      
+
       // Initialize semantic search tools if using PostgreSQL
       const managerType = JournalManagerFactory.getManagerType();
       if (managerType === 'postgresql') {
