@@ -1,6 +1,8 @@
 // ABOUTME: Semantic search MCP tools integration for Mnemosyne AI Memory Distillation
 // ABOUTME: Provides enhanced semantic search capabilities for journal entries and distilled insights
 
+import { SearchService, SearchResult } from './search';
+
 // Type definitions for the enhanced MCP tools
 export interface MCPToolResult {
   success: boolean;
