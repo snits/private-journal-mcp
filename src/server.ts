@@ -691,16 +691,41 @@ export class PrivateJournalServer {
 
       // Semantic search tools (require Mnemosyne integration)
       if (request.params.name === 'semantic_search_insights') {
-        // Validate parameters first
+        // Validate parameters first with enhanced error messaging
         const validation = validateSemanticSearchParams(args);
         if (!validation.isValid) {
-          throw new Error(`Invalid parameters: ${validation.errors.join(', ')}`);
+          const parameterErrors = validation.errors.map(error => `• ${error}`).join('\n');
+          throw new Error(
+            `Parameter validation failed:\n${parameterErrors}\n\n` +
+            `Tip: Most search_journal parameters are supported in semantic_search_insights. ` +
+            `Check parameter names and value formats match the tool schema.`
+          );
         }
 
         const params = validation.sanitized!;
 
         // Check if Mnemosyne semantic search tools are available
         if (!this.semanticSearchTools) {
+          // Detect semantic-specific parameters that won't work in fallback
+          const semanticOnlyParams = [];
+          if (params.similarity_threshold !== undefined && params.similarity_threshold !== 0.7) {
+            semanticOnlyParams.push(`similarity_threshold: ${params.similarity_threshold}`);
+          }
+          if (params.quality_threshold !== undefined && params.quality_threshold !== 0.7) {
+            semanticOnlyParams.push(`quality_threshold: ${params.quality_threshold}`);
+          }
+          if (params.category !== undefined) {
+            semanticOnlyParams.push(`category: ${params.category}`);
+          }
+
+          // Warn about semantic-specific parameters that will be ignored
+          let compatibilityWarning = '';
+          if (semanticOnlyParams.length > 0) {
+            compatibilityWarning = `\n\n⚠️  COMPATIBILITY NOTE: The following semantic search parameters will be ignored in fallback mode:\n` +
+              semanticOnlyParams.map(param => `• ${param}`).join('\n') +
+              `\n\nTo use these parameters, enable the Mnemosyne distillation system with PostgreSQL database.`;
+          }
+
           // Fall back to using search_journal logic with semantic parameters
           try {
             const searchOptions = transformFromSemanticSearchParams(params);
@@ -716,7 +741,8 @@ export class PrivateJournalServer {
                   {
                     type: 'text',
                     text:
-                      results.length > 0
+                      `🔄 FALLBACK MODE: Using search_journal compatibility layer (Mnemosyne distillation system not available)${compatibilityWarning}\n\n` +
+                      (results.length > 0
                         ? `Found ${results.length} relevant entries:\n\n${results
                             .map((result, i) => {
                               const contextWarning = result.cross_project_warning
@@ -740,7 +766,7 @@ export class PrivateJournalServer {
                               );
                             })
                             .join('\n')}`
-                        : 'No relevant entries found.',
+                        : 'No relevant entries found.'),
                   },
                 ],
               };
@@ -753,7 +779,8 @@ export class PrivateJournalServer {
                   {
                     type: 'text',
                     text:
-                      results.length > 0
+                      `🔄 FALLBACK MODE: Using search_journal compatibility layer (Mnemosyne distillation system not available)${compatibilityWarning}\n\n` +
+                      (results.length > 0
                         ? `Found ${results.length} relevant entries:\n\n${results
                             .map(
                               (result, i) =>
@@ -763,14 +790,45 @@ export class PrivateJournalServer {
                                 `   Excerpt: ${result.excerpt}...\n`
                             )
                             .join('\n')}`
-                        : 'No relevant entries found.',
+                        : 'No relevant entries found.'),
                   },
                 ],
               };
             }
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-            throw new Error(`Failed to search insights (fallback): ${errorMessage}`);
+            
+            // Provide specific guidance based on error type
+            let troubleshootingGuidance = '';
+            if (errorMessage.includes('ENOENT') || errorMessage.includes('not found')) {
+              troubleshootingGuidance = '\n\nTROUBLESHOOTING:\n' +
+                '• Check that journal entries exist in the expected directories\n' +
+                '• Verify file permissions for journal storage paths\n' +
+                '• Try using search_journal tool directly to test basic search functionality';
+            } else if (errorMessage.includes('embedding') || errorMessage.includes('model')) {
+              troubleshootingGuidance = '\n\nTROUBLESHOOTING:\n' +
+                '• Ensure embedding models are properly installed and accessible\n' +
+                '• Check network connectivity if using remote embedding services\n' +
+                '• Verify that search indexing has completed for existing entries';
+            } else if (errorMessage.includes('database') || errorMessage.includes('connection')) {
+              troubleshootingGuidance = '\n\nTROUBLESHOOTING:\n' +
+                '• Check database connection configuration\n' +
+                '• Verify that database migrations have been run\n' +
+                '• Ensure database service is running and accessible';
+            } else {
+              troubleshootingGuidance = '\n\nTROUBLESHOOTING:\n' +
+                '• Try using search_journal tool directly to isolate the issue\n' +
+                '• Check that the query is well-formed and not empty\n' +
+                '• Verify that search parameters are within valid ranges';
+            }
+
+            throw new Error(
+              `Compatibility layer failed: ${errorMessage}${troubleshootingGuidance}\n\n` +
+              `FALLBACK OPTIONS:\n` +
+              `• Use search_journal tool directly with compatible parameters\n` +
+              `• Enable Mnemosyne distillation system for full semantic search capabilities\n` +
+              `• Check get_semantic_search_stats for system status information`
+            );
           }
         }
 
@@ -790,7 +848,33 @@ export class PrivateJournalServer {
           };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-          throw new Error(`Failed to search insights: ${errorMessage}`);
+          
+          // Provide guidance for Mnemosyne-specific errors
+          let mnemosyneGuidance = '';
+          if (errorMessage.includes('distillation') || errorMessage.includes('insights')) {
+            mnemosyneGuidance = '\n\nMNEMOSYNE TROUBLESHOOTING:\n' +
+              '• Run distill_and_search to generate insights from recent entries\n' +
+              '• Check that quality_threshold and similarity_threshold are appropriate\n' +
+              '• Verify that the distillation system has processed recent journal entries';
+          } else if (errorMessage.includes('vector') || errorMessage.includes('embedding')) {
+            mnemosyneGuidance = '\n\nVECTOR STORE TROUBLESHOOTING:\n' +
+              '• Ensure vector database is properly configured and running\n' +
+              '• Check that embeddings have been generated for journal content\n' +
+              '• Verify vector store indexing is complete and up-to-date';
+          } else {
+            mnemosyneGuidance = '\n\nGENERAL TROUBLESHOOTING:\n' +
+              '• Check get_semantic_search_stats for detailed system status\n' +
+              '• Verify Mnemosyne distillation system configuration\n' +
+              '• Try using search_journal as a fallback option';
+          }
+
+          throw new Error(
+            `Semantic search failed: ${errorMessage}${mnemosyneGuidance}\n\n` +
+            `AVAILABLE ALTERNATIVES:\n` +
+            `• Use search_journal for basic semantic search without distillation\n` +
+            `• Check get_semantic_search_stats to diagnose system issues\n` +
+            `• Use distill_and_search to generate insights and search simultaneously`
+          );
         }
       }
 
