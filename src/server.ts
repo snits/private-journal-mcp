@@ -554,7 +554,8 @@ export class PrivateJournalServer {
             options.min_relevance !== 0.6;
 
           if (useProjectAwareSearch) {
-            const results = await this.projectAwareSearch.search(args.query, options);
+            const rawResults = await this.projectAwareSearch.search(args.query, options);
+            const results = normalizeSearchResponse(rawResults);
             return {
               content: [
                 {
@@ -580,7 +581,7 @@ export class PrivateJournalServer {
                               `${i + 1}. [Score: ${result.score.toFixed(3)}${contextMatch}]${contextWarning} ${timestampDisplay} (${result.type})\n` +
                               `   Sections: ${result.sections.join(', ')}\n` +
                               `   Path: ${result.path}\n` +
-                              `   Excerpt: ${result.excerpt || result.text?.slice(0, 200)}...\n`
+                              `   Excerpt: ${result.excerpt}...\n`
                             );
                           })
                           .join('\n')}`
@@ -590,7 +591,8 @@ export class PrivateJournalServer {
             };
           } else {
             // Fall back to traditional search for backwards compatibility
-            const results = await this.journalManager.searchBySimilarity(args.query, options);
+            const rawResults = await this.journalManager.searchBySimilarity(args.query, options);
+            const results = normalizeSearchResponse(rawResults);
             return {
               content: [
                 {
@@ -600,10 +602,10 @@ export class PrivateJournalServer {
                       ? `Found ${results.length} relevant entries:\n\n${results
                           .map(
                             (result, i) =>
-                              `${i + 1}. [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} (${result.entry_type})\n` +
+                              `${i + 1}. [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} (${result.type})\n` +
                               `   Sections: ${result.sections.join(', ')}\n` +
-                              `   Path: ${result.file_path}\n` +
-                              `   Excerpt: ${result.searchable_text?.slice(0, 200)}...\n`
+                              `   Path: ${result.path}\n` +
+                              `   Excerpt: ${result.excerpt}...\n`
                           )
                           .join('\n')}`
                       : 'No relevant entries found.',
@@ -657,7 +659,8 @@ export class PrivateJournalServer {
         };
 
         try {
-          const results = await this.journalManager.listRecent(options);
+          const rawResults = await this.journalManager.listRecent(options);
+          const results = normalizeSearchResponse(rawResults);
           return {
             content: [
               {
@@ -667,10 +670,10 @@ export class PrivateJournalServer {
                     ? `Recent entries (last ${days} days):\n\n${results
                         .map(
                           (result, i) =>
-                            `${i + 1}. ${result.timestamp.toLocaleDateString()} (${result.entry_type})\n` +
+                            `${i + 1}. ${result.timestamp.toLocaleDateString()} (${result.type})\n` +
                             `   Sections: ${result.sections.join(', ')}\n` +
-                            `   Path: ${result.file_path}\n` +
-                            `   Excerpt: ${result.searchable_text?.slice(0, 200)}...\n`
+                            `   Path: ${result.path}\n` +
+                            `   Excerpt: ${result.excerpt}...\n`
                         )
                         .join('\n')}`
                     : `No entries found in the last ${days} days.`,
@@ -703,7 +706,8 @@ export class PrivateJournalServer {
             const useProjectAwareSearch = hasProjectAwareParams(params);
 
             if (useProjectAwareSearch) {
-              const results = await this.projectAwareSearch.search(params.query, searchOptions);
+              const rawResults = await this.projectAwareSearch.search(params.query, searchOptions);
+              const results = normalizeSearchResponse(rawResults);
               return {
                 content: [
                   {
@@ -729,7 +733,7 @@ export class PrivateJournalServer {
                                 `${i + 1}. [Score: ${result.score.toFixed(3)}${contextMatch}]${contextWarning} ${timestampDisplay} (${result.type})\n` +
                                 `   Sections: ${result.sections.join(', ')}\n` +
                                 `   Path: ${result.path}\n` +
-                                `   Excerpt: ${result.excerpt || result.text?.slice(0, 200)}...\n`
+                                `   Excerpt: ${result.excerpt}...\n`
                               );
                             })
                             .join('\n')}`
@@ -739,7 +743,8 @@ export class PrivateJournalServer {
               };
             } else {
               // Fall back to traditional search
-              const results = await this.journalManager.searchBySimilarity(params.query, searchOptions);
+              const rawResults = await this.journalManager.searchBySimilarity(params.query, searchOptions);
+              const results = normalizeSearchResponse(rawResults);
               return {
                 content: [
                   {
@@ -749,10 +754,10 @@ export class PrivateJournalServer {
                         ? `Found ${results.length} relevant entries:\n\n${results
                             .map(
                               (result, i) =>
-                                `${i + 1}. [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} (${result.entry_type})\n` +
+                                `${i + 1}. [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} (${result.type})\n` +
                                 `   Sections: ${result.sections.join(', ')}\n` +
-                                `   Path: ${result.file_path}\n` +
-                                `   Excerpt: ${result.searchable_text?.slice(0, 200)}...\n`
+                                `   Path: ${result.path}\n` +
+                                `   Excerpt: ${result.excerpt}...\n`
                             )
                             .join('\n')}`
                         : 'No relevant entries found.',
