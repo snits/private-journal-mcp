@@ -369,6 +369,10 @@ export function normalizeSearchResponse(results: any[]): any[] {
       timestamp: result.timestamp || result.created_at || new Date(),
       type: result.type || result.entry_type || 'unknown',
       sections: result.sections || [],
+      // Agent metadata fields
+      ...(result.agent_id && { agent_id: result.agent_id }),
+      ...(result.model_id && { model_id: result.model_id }),
+      ...(result.visibility_level && { visibility_level: result.visibility_level }),
       // Preserve additional fields for project-aware responses
       ...(result.cross_project_warning && { cross_project_warning: result.cross_project_warning }),
       ...(result.project_name && { project_name: result.project_name }),
