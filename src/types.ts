@@ -113,6 +113,10 @@ export interface SearchResult {
   sections: string[];
   searchable_text?: string;
   file_path?: string;
+  // Agent metadata fields
+  agent_id?: string;
+  model_id?: string;
+  visibility_level?: VisibilityLevel;
   // Project-aware fields
   cross_project_warning?: boolean;
   project_name?: string;
