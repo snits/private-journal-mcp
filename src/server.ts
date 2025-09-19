@@ -18,6 +18,156 @@ import { JournalManagerFactory, JournalManagerInterface } from './journal-manage
 import { createDatabaseConfig } from './database-config';
 import { SemanticSearchTools } from './semantic-search-tools';
 
+// =====================================================
+// SECURITY: Journal Path Validation
+// =====================================================
+
+// Constants for journal path validation - improves maintainability
+const VALID_JOURNAL_TYPES = ['project', 'user'];
+const VALID_VISIBILITY_LEVELS = ['private', 'public', 'team', 'crb'];
+
+/**
+ * Validates journal entry paths to prevent IDOR attacks and directory traversal
+ *
+ * Expected formats:
+ * - Simple: YYYY-MM-DD/HH-MM-SS-μμμμμμ.md
+ * - Typed: {type}/YYYY-MM-DD/HH-MM-SS-μμμμμμ.md (type: project|user)
+ * - Agent-aware: {model_id}/{agent_id}/{visibility_level}/YYYY-MM-DD/HH-MM-SS-μμμμμμ.md
+ *
+ * Security restrictions:
+ * - No directory traversal sequences (..)
+ * - No null bytes (\0)
+ * - No absolute paths (starting with /)
+ * - Strict whitelist pattern matching
+ * - Component validation with constraints
+ */
+function isValidJournalPath(path: string): boolean {
+  // Basic security checks - apply Mnemosyne's validation patterns
+  if (!path || typeof path !== 'string') {
+    return false;
+  }
+
+  // Path length validation
+  if (path.length === 0 || path.length > 4096) {
+    return false;
+  }
+
+  // Directory traversal protection
+  if (path.includes('..') || path.includes('\0')) {
+    return false;
+  }
+
+  // Reject absolute paths
+  if (path.startsWith('/')) {
+    return false;
+  }
+
+  // Reject paths with consecutive slashes or other malformed patterns
+  if (path.includes('//') || path.includes('\\/') || path.includes('/\\')) {
+    return false;
+  }
+
+  // Normalize path separators and split components, filtering empty components for robustness
+  const normalizedPath = path.replace(/\\/g, '/');
+  const components = normalizedPath.split('/').filter(c => c.length > 0);
+
+  // Must end with .md file
+  if (!normalizedPath.endsWith('.md')) {
+    return false;
+  }
+
+  // Extract filename (last component)
+  const filename = components[components.length - 1];
+  const dateDir = components[components.length - 2];
+
+  // Validate filename pattern: HH-MM-SS-μμμμμμ.md
+  const filenamePattern = /^(\d{2})-(\d{2})-(\d{2})-(\d{6})\.md$/;
+  const filenameMatch = filename.match(filenamePattern);
+  if (!filenameMatch) {
+    return false;
+  }
+
+  const [, hours, minutes, seconds, microseconds] = filenameMatch;
+
+  // Validate time components
+  const h = parseInt(hours, 10);
+  const m = parseInt(minutes, 10);
+  const s = parseInt(seconds, 10);
+
+  if (h > 23 || m > 59 || s > 59) {
+    return false;
+  }
+
+  // Validate date directory pattern: YYYY-MM-DD
+  const datePattern = /^(\d{4})-(\d{2})-(\d{2})$/;
+  const dateMatch = dateDir?.match(datePattern);
+  if (!dateMatch) {
+    return false;
+  }
+
+  const [, year, month, day] = dateMatch;
+  const yyyy = parseInt(year, 10);
+  const mm = parseInt(month, 10);
+  const dd = parseInt(day, 10);
+
+  // Validate date components with proper date logic to prevent impossible dates
+  if (yyyy < 2020 || yyyy > 2100) {
+    return false;
+  }
+  const date = new Date(Date.UTC(yyyy, mm - 1, dd));
+  if (date.getUTCFullYear() !== yyyy || date.getUTCMonth() !== mm - 1 || date.getUTCDate() !== dd) {
+    return false;
+  }
+
+  // Validate path structure based on number of components
+  switch (components.length) {
+    case 2:
+      // Simple format: YYYY-MM-DD/HH-MM-SS-μμμμμμ.md
+      return true;
+
+    case 3:
+      // Typed format: {type}/YYYY-MM-DD/HH-MM-SS-μμμμμμ.md
+      const type = components[0];
+      return VALID_JOURNAL_TYPES.includes(type);
+
+    case 5:
+      // Agent-aware: {model_id}/{agent_id}/{visibility_level}/YYYY-MM-DD/HH-MM-SS-μμμμμμ.md
+      const [modelId, agentId, visibilityLevel] = components;
+
+      // Validate model_id (basic alphanumeric with dashes/dots)
+      if (!/^[a-zA-Z0-9._-]{1,100}$/.test(modelId)) {
+        return false;
+      }
+
+      // Validate agent_id (basic alphanumeric with dashes/underscores)
+      if (!/^[a-zA-Z0-9_-]{1,100}$/.test(agentId)) {
+        return false;
+      }
+
+      // Validate visibility_level using constants
+      if (!VALID_VISIBILITY_LEVELS.includes(visibilityLevel)) {
+        return false;
+      }
+
+      return true;
+
+    default:
+      // Any other format is invalid
+      return false;
+  }
+}
+
+/**
+ * Sanitizes error messages to prevent information disclosure
+ * Based on Mnemosyne's sanitizeValidationErrors pattern
+ */
+function sanitizeErrorMessage(error: string): string {
+  return error
+    .replace(/\/[^\s]*/g, '[path]')
+    .replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, '[ip]')
+    .replace(/[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}/gi, '[uuid]');
+}
+
 export class PrivateJournalServer {
   private server: Server;
   private journalManager: JournalManagerInterface;
@@ -637,6 +787,12 @@ export class PrivateJournalServer {
           throw new Error('path is required and must be a string');
         }
 
+        // SECURITY: Validate journal path to prevent IDOR attacks
+        if (!isValidJournalPath(args.path)) {
+          // Use generic error message that doesn't include user input to prevent information disclosure
+          throw new Error('Invalid journal path format');
+        }
+
         try {
           const content = await this.journalManager.readEntryByPath(args.path);
           if (content === null) {
@@ -652,7 +808,7 @@ export class PrivateJournalServer {
           };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-          throw new Error(`Failed to read entry: ${errorMessage}`);
+          throw new Error(`Failed to read entry: ${sanitizeErrorMessage(errorMessage)}`);
         }
       }
 
