@@ -1,7 +1,12 @@
 // ABOUTME: Parameter transformation utilities for semantic search compatibility
 // ABOUTME: Converts between search_journal and semantic_search_insights parameter formats
 
-import { SearchOptions, SemanticSearchOptions, SemanticSearchInsightsParams, VisibilityLevel } from './types';
+import {
+  SearchOptions,
+  SemanticSearchOptions,
+  SemanticSearchInsightsParams,
+  VisibilityLevel,
+} from './types';
 import { SearchInsightsRequest } from './semantic-search-tools';
 
 /**
@@ -93,28 +98,45 @@ export function validateSemanticSearchParams(params: any): {
 
   // Numeric parameter validation with proper type checking
   if (params.limit !== undefined) {
-    if (typeof params.limit !== 'number' || !Number.isInteger(params.limit) || params.limit < 1 || params.limit > 100) {
+    if (
+      typeof params.limit !== 'number' ||
+      !Number.isInteger(params.limit) ||
+      params.limit < 1 ||
+      params.limit > 100
+    ) {
       errors.push('limit must be an integer between 1 and 100');
     }
   }
 
   if (params.similarity_threshold !== undefined) {
-    if (typeof params.similarity_threshold !== 'number' || isNaN(params.similarity_threshold) || 
-        params.similarity_threshold < 0 || params.similarity_threshold > 1) {
+    if (
+      typeof params.similarity_threshold !== 'number' ||
+      isNaN(params.similarity_threshold) ||
+      params.similarity_threshold < 0 ||
+      params.similarity_threshold > 1
+    ) {
       errors.push('similarity_threshold must be a number between 0 and 1');
     }
   }
 
   if (params.quality_threshold !== undefined) {
-    if (typeof params.quality_threshold !== 'number' || isNaN(params.quality_threshold) || 
-        params.quality_threshold < 0 || params.quality_threshold > 1) {
+    if (
+      typeof params.quality_threshold !== 'number' ||
+      isNaN(params.quality_threshold) ||
+      params.quality_threshold < 0 ||
+      params.quality_threshold > 1
+    ) {
       errors.push('quality_threshold must be a number between 0 and 1');
     }
   }
 
   if (params.min_relevance !== undefined) {
-    if (typeof params.min_relevance !== 'number' || isNaN(params.min_relevance) || 
-        params.min_relevance < 0 || params.min_relevance > 1) {
+    if (
+      typeof params.min_relevance !== 'number' ||
+      isNaN(params.min_relevance) ||
+      params.min_relevance < 0 ||
+      params.min_relevance > 1
+    ) {
       errors.push('min_relevance must be a number between 0 and 1');
     }
   }
@@ -192,7 +214,13 @@ export function validateSemanticSearchParams(params: any): {
     if (!Array.isArray(params.sections)) {
       errors.push('sections must be an array of strings');
     } else {
-      const validSections = ['feelings', 'project_notes', 'user_context', 'technical_insights', 'world_knowledge'];
+      const validSections = [
+        'feelings',
+        'project_notes',
+        'user_context',
+        'technical_insights',
+        'world_knowledge',
+      ];
       for (let i = 0; i < params.sections.length; i++) {
         if (typeof params.sections[i] !== 'string') {
           errors.push(`sections[${i}] must be a string`);
@@ -281,13 +309,13 @@ export function validateSemanticSearchParams(params: any): {
     quality_threshold: params.quality_threshold || 0.7,
     category: params.category?.trim(),
     date_range: params.date_range,
-    type: params.type?.toLowerCase().trim() as 'project' | 'user' | 'both' || 'both',
+    type: (params.type?.toLowerCase().trim() as 'project' | 'user' | 'both') || 'both',
     sections: params.sections?.map((s: string) => s.trim()),
     agent_id: params.agent_id?.trim(),
     model_id: params.model_id?.trim(),
     visibility_level: params.visibility_level?.toLowerCase().trim() as VisibilityLevel,
     accessible_to_agent: params.accessible_to_agent?.trim(),
-    project_filter: Array.isArray(params.project_filter) 
+    project_filter: Array.isArray(params.project_filter)
       ? params.project_filter.map((p: string) => p.trim())
       : params.project_filter?.toLowerCase?.().trim() || params.project_filter,
     language_filter: params.language_filter?.trim(),
@@ -331,7 +359,9 @@ export function extractSemanticParams(params: SemanticSearchInsightsParams): {
  * Converts SemanticSearchInsightsParams to SearchInsightsRequest format
  * Handles the specific requirements of the Mnemosyne semantic search tools
  */
-export function toSearchInsightsRequest(params: SemanticSearchInsightsParams): SearchInsightsRequest {
+export function toSearchInsightsRequest(
+  params: SemanticSearchInsightsParams
+): SearchInsightsRequest {
   const request: SearchInsightsRequest = {
     query: params.query,
     limit: params.limit,
@@ -357,10 +387,10 @@ export function toSearchInsightsRequest(params: SemanticSearchInsightsParams): S
  * Ensures responses match expected format regardless of source
  */
 export function normalizeSearchResponse(results: any[]): any[] {
-  return results.map(result => {
+  return results.map((result) => {
     const text = result.text || result.searchable_text || '';
     const excerpt = result.excerpt || (text ? text.slice(0, 200) : '');
-    
+
     return {
       score: result.score || result.similarity_score || 0,
       path: result.path || result.file_path || '',

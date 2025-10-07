@@ -5,7 +5,13 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { ProcessFeelingsRequest, ProcessThoughtsRequest } from './types';
-import { validateSemanticSearchParams, transformFromSemanticSearchParams, hasProjectAwareParams, normalizeSearchResponse, toSearchInsightsRequest } from './parameter-transformation';
+import {
+  validateSemanticSearchParams,
+  transformFromSemanticSearchParams,
+  hasProjectAwareParams,
+  normalizeSearchResponse,
+  toSearchInsightsRequest,
+} from './parameter-transformation';
 import { SearchService } from './search';
 import { ProjectAwareSearchService } from './project-aware-search';
 import { JournalManagerFactory, JournalManagerInterface } from './journal-manager-factory';
@@ -260,7 +266,8 @@ export class PrivateJournalServer {
               type: {
                 type: 'string',
                 enum: ['project', 'user', 'both'],
-                description: 'Search in project-specific notes, user-global notes, or both (default: both)',
+                description:
+                  'Search in project-specific notes, user-global notes, or both (default: both)',
                 default: 'both',
               },
               sections: {
@@ -283,7 +290,8 @@ export class PrivateJournalServer {
               },
               accessible_to_agent: {
                 type: 'string',
-                description: 'Show only entries accessible to this agent (considers visibility rules)',
+                description:
+                  'Show only entries accessible to this agent (considers visibility rules)',
               },
               project_filter: {
                 oneOf: [
@@ -291,7 +299,8 @@ export class PrivateJournalServer {
                   { type: 'string' },
                   { type: 'array', items: { type: 'string' } },
                 ],
-                description: "Filter by project context: 'current' (auto-detect), 'all', specific project name(s)",
+                description:
+                  "Filter by project context: 'current' (auto-detect), 'all', specific project name(s)",
               },
               // Additional project-aware parameters
               language_filter: {
@@ -305,7 +314,8 @@ export class PrivateJournalServer {
               },
               min_relevance: {
                 type: 'number',
-                description: 'Minimum relevance score for cross-project results (0.0-1.0, default: 0.6)',
+                description:
+                  'Minimum relevance score for cross-project results (0.0-1.0, default: 0.6)',
                 default: 0.6,
                 minimum: 0.0,
                 maximum: 1.0,
@@ -694,11 +704,11 @@ export class PrivateJournalServer {
         // Validate parameters first with enhanced error messaging
         const validation = validateSemanticSearchParams(args);
         if (!validation.isValid) {
-          const parameterErrors = validation.errors.map(error => `• ${error}`).join('\n');
+          const parameterErrors = validation.errors.map((error) => `• ${error}`).join('\n');
           throw new Error(
             `Parameter validation failed:\n${parameterErrors}\n\n` +
-            `Tip: Most search_journal parameters are supported in semantic_search_insights. ` +
-            `Check parameter names and value formats match the tool schema.`
+              `Tip: Most search_journal parameters are supported in semantic_search_insights. ` +
+              `Check parameter names and value formats match the tool schema.`
           );
         }
 
@@ -721,15 +731,16 @@ export class PrivateJournalServer {
           // Warn about semantic-specific parameters that will be ignored
           let compatibilityWarning = '';
           if (semanticOnlyParams.length > 0) {
-            compatibilityWarning = `\n\n⚠️  COMPATIBILITY NOTE: The following semantic search parameters will be ignored in fallback mode:\n` +
-              semanticOnlyParams.map(param => `• ${param}`).join('\n') +
+            compatibilityWarning =
+              `\n\n⚠️  COMPATIBILITY NOTE: The following semantic search parameters will be ignored in fallback mode:\n` +
+              semanticOnlyParams.map((param) => `• ${param}`).join('\n') +
               `\n\nTo use these parameters, enable the Mnemosyne distillation system with PostgreSQL database.`;
           }
 
           // Fall back to using search_journal logic with semantic parameters
           try {
             const searchOptions = transformFromSemanticSearchParams(params);
-            
+
             // Use project-aware search if any project-specific options are provided
             const useProjectAwareSearch = hasProjectAwareParams(params);
 
@@ -772,7 +783,10 @@ export class PrivateJournalServer {
               };
             } else {
               // Fall back to traditional search
-              const rawResults = await this.journalManager.searchBySimilarity(params.query, searchOptions);
+              const rawResults = await this.journalManager.searchBySimilarity(
+                params.query,
+                searchOptions
+              );
               const results = normalizeSearchResponse(rawResults);
               return {
                 content: [
@@ -797,26 +811,30 @@ export class PrivateJournalServer {
             }
           } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-            
+
             // Provide specific guidance based on error type
             let troubleshootingGuidance = '';
             if (errorMessage.includes('ENOENT') || errorMessage.includes('not found')) {
-              troubleshootingGuidance = '\n\nTROUBLESHOOTING:\n' +
+              troubleshootingGuidance =
+                '\n\nTROUBLESHOOTING:\n' +
                 '• Check that journal entries exist in the expected directories\n' +
                 '• Verify file permissions for journal storage paths\n' +
                 '• Try using search_journal tool directly to test basic search functionality';
             } else if (errorMessage.includes('embedding') || errorMessage.includes('model')) {
-              troubleshootingGuidance = '\n\nTROUBLESHOOTING:\n' +
+              troubleshootingGuidance =
+                '\n\nTROUBLESHOOTING:\n' +
                 '• Ensure embedding models are properly installed and accessible\n' +
                 '• Check network connectivity if using remote embedding services\n' +
                 '• Verify that search indexing has completed for existing entries';
             } else if (errorMessage.includes('database') || errorMessage.includes('connection')) {
-              troubleshootingGuidance = '\n\nTROUBLESHOOTING:\n' +
+              troubleshootingGuidance =
+                '\n\nTROUBLESHOOTING:\n' +
                 '• Check database connection configuration\n' +
                 '• Verify that database migrations have been run\n' +
                 '• Ensure database service is running and accessible';
             } else {
-              troubleshootingGuidance = '\n\nTROUBLESHOOTING:\n' +
+              troubleshootingGuidance =
+                '\n\nTROUBLESHOOTING:\n' +
                 '• Try using search_journal tool directly to isolate the issue\n' +
                 '• Check that the query is well-formed and not empty\n' +
                 '• Verify that search parameters are within valid ranges';
@@ -824,10 +842,10 @@ export class PrivateJournalServer {
 
             throw new Error(
               `Compatibility layer failed: ${errorMessage}${troubleshootingGuidance}\n\n` +
-              `FALLBACK OPTIONS:\n` +
-              `• Use search_journal tool directly with compatible parameters\n` +
-              `• Enable Mnemosyne distillation system for full semantic search capabilities\n` +
-              `• Check get_semantic_search_stats for system status information`
+                `FALLBACK OPTIONS:\n` +
+                `• Use search_journal tool directly with compatible parameters\n` +
+                `• Enable Mnemosyne distillation system for full semantic search capabilities\n` +
+                `• Check get_semantic_search_stats for system status information`
             );
           }
         }
@@ -848,21 +866,24 @@ export class PrivateJournalServer {
           };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-          
+
           // Provide guidance for Mnemosyne-specific errors
           let mnemosyneGuidance = '';
           if (errorMessage.includes('distillation') || errorMessage.includes('insights')) {
-            mnemosyneGuidance = '\n\nMNEMOSYNE TROUBLESHOOTING:\n' +
+            mnemosyneGuidance =
+              '\n\nMNEMOSYNE TROUBLESHOOTING:\n' +
               '• Run distill_and_search to generate insights from recent entries\n' +
               '• Check that quality_threshold and similarity_threshold are appropriate\n' +
               '• Verify that the distillation system has processed recent journal entries';
           } else if (errorMessage.includes('vector') || errorMessage.includes('embedding')) {
-            mnemosyneGuidance = '\n\nVECTOR STORE TROUBLESHOOTING:\n' +
+            mnemosyneGuidance =
+              '\n\nVECTOR STORE TROUBLESHOOTING:\n' +
               '• Ensure vector database is properly configured and running\n' +
               '• Check that embeddings have been generated for journal content\n' +
               '• Verify vector store indexing is complete and up-to-date';
           } else {
-            mnemosyneGuidance = '\n\nGENERAL TROUBLESHOOTING:\n' +
+            mnemosyneGuidance =
+              '\n\nGENERAL TROUBLESHOOTING:\n' +
               '• Check get_semantic_search_stats for detailed system status\n' +
               '• Verify Mnemosyne distillation system configuration\n' +
               '• Try using search_journal as a fallback option';
@@ -870,10 +891,10 @@ export class PrivateJournalServer {
 
           throw new Error(
             `Semantic search failed: ${errorMessage}${mnemosyneGuidance}\n\n` +
-            `AVAILABLE ALTERNATIVES:\n` +
-            `• Use search_journal for basic semantic search without distillation\n` +
-            `• Check get_semantic_search_stats to diagnose system issues\n` +
-            `• Use distill_and_search to generate insights and search simultaneously`
+              `AVAILABLE ALTERNATIVES:\n` +
+              `• Use search_journal for basic semantic search without distillation\n` +
+              `• Check get_semantic_search_stats to diagnose system issues\n` +
+              `• Use distill_and_search to generate insights and search simultaneously`
           );
         }
       }

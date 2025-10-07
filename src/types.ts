@@ -82,7 +82,7 @@ export interface SemanticSearchOptions extends SearchOptions {
   // Date range with ISO string format for API compatibility
   date_range?: {
     start?: string; // ISO date string
-    end?: string;   // ISO date string
+    end?: string; // ISO date string
   };
 }
 
