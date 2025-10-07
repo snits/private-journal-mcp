@@ -3,7 +3,7 @@
 
 import { Pool, PoolClient } from 'pg';
 import { DatabaseConfig, createDatabaseConfig } from './database-config';
-import { EmbeddingService } from './embedding-service';
+import { OpenAIEmbeddingService as EmbeddingService } from './openai-embedding-service';
 import {
   VisibilityLevel,
   SearchOptions,
@@ -106,7 +106,7 @@ export class PostgreSQLJournalManager {
           embeddingData.embedding
             ? Buffer.from(new Float32Array(embeddingData.embedding).buffer)
             : null,
-          embeddingData.sections || [],
+          JSON.stringify(embeddingData.sections || []),
           'private',
           'private-journal-mcp', // Default user_id for private-journal-mcp entries
         ]
@@ -209,7 +209,7 @@ export class PostgreSQLJournalManager {
           embeddingData.embedding
             ? Buffer.from(new Float32Array(embeddingData.embedding).buffer)
             : null,
-          embeddingData.sections || [],
+          JSON.stringify(embeddingData.sections || []),
           'private-journal-mcp', // Default user_id for private-journal-mcp entries
         ]
       );
