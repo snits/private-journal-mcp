@@ -6,6 +6,7 @@
 import * as path from 'path';
 import { PrivateJournalServer } from './server';
 import { resolveProjectJournalPath } from './paths';
+import 'dotenv/config';
 
 function parseArguments(): string {
   const args = process.argv.slice(2);
