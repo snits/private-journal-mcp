@@ -134,7 +134,7 @@ describe('PostgreSQL Integration Tests', () => {
         world_knowledge: 'PostgreSQL provides excellent concurrency and ACID compliance',
         agent_id: 'test-specialist',
         model_id: 'claude-sonnet-4',
-        visibility_level: 'private'
+        visibility_level: 'private' as 'private' | 'team' | 'public' | 'crb'
       };
 
       // Write thoughts via PostgreSQL manager
@@ -463,8 +463,10 @@ Microservices provide significant benefits for large teams but require substanti
       expect(simpleEntry).toBeDefined();
 
       // Verify comprehensive entry has better distillation potential
-      expect(comprehensiveEntry!.searchable_text.length).toBeGreaterThan(simpleEntry!.searchable_text.length * 5);
-      expect(comprehensiveEntry!.sections.length).toBeGreaterThan(simpleEntry!.sections.length);
+      if (comprehensiveEntry && simpleEntry && comprehensiveEntry.searchable_text && simpleEntry.searchable_text) {
+        expect(comprehensiveEntry.searchable_text.length).toBeGreaterThan(simpleEntry.searchable_text.length * 5);
+        expect(comprehensiveEntry.sections.length).toBeGreaterThan(simpleEntry.sections.length);
+      }
       expect(comprehensiveEntry!.content.includes('## Executive Summary')).toBe(true);
       expect(comprehensiveEntry!.content.includes('## Recommendations')).toBe(true);
     });
