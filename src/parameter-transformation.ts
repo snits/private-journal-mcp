@@ -360,7 +360,7 @@ export function extractSemanticParams(params: SemanticSearchInsightsParams): {
  */
 export function normalizeSearchResponse(results: any[]): any[] {
   return results.map((result) => {
-    const text = result.text || result.searchable_text || '';
+    const text = result.text || result.content || result.searchable_text || '';
     const excerpt = result.excerpt || (text ? text.slice(0, 200) : '');
 
     return {
