@@ -5,13 +5,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { ProcessFeelingsRequest, ProcessThoughtsRequest } from './types';
-import {
-  validateSemanticSearchParams,
-  transformFromSemanticSearchParams,
-  hasProjectAwareParams,
-  normalizeSearchResponse,
-  toSearchInsightsRequest,
-} from './parameter-transformation';
+import { normalizeSearchResponse } from './parameter-transformation';
 import { SearchService } from './search';
 import { ProjectAwareSearchService } from './project-aware-search';
 import { JournalManagerFactory, JournalManagerInterface } from './journal-manager-factory';

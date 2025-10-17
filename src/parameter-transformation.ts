@@ -7,7 +7,6 @@ import {
   SemanticSearchInsightsParams,
   VisibilityLevel,
 } from './types';
-import { SearchInsightsRequest } from './semantic-search-tools';
 
 /**
  * Transforms search_journal parameters to semantic_search_insights format
@@ -353,33 +352,6 @@ export function extractSemanticParams(params: SemanticSearchInsightsParams): {
     quality_threshold: params.quality_threshold,
     category: params.category,
   };
-}
-
-/**
- * Converts SemanticSearchInsightsParams to SearchInsightsRequest format
- * Handles the specific requirements of the Mnemosyne semantic search tools
- */
-export function toSearchInsightsRequest(
-  params: SemanticSearchInsightsParams
-): SearchInsightsRequest {
-  const request: SearchInsightsRequest = {
-    query: params.query,
-    limit: params.limit,
-    similarity_threshold: params.similarity_threshold,
-    quality_threshold: params.quality_threshold,
-    category: params.category,
-  };
-
-  // Only include date_range if both start and end are provided
-  // as SearchInsightsRequest requires both properties to be present
-  if (params.date_range?.start && params.date_range?.end) {
-    request.date_range = {
-      start: params.date_range.start,
-      end: params.date_range.end,
-    };
-  }
-
-  return request;
 }
 
 /**
