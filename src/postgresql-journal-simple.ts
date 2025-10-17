@@ -258,7 +258,7 @@ export class PostgreSQLJournalManager {
     const queryEmbedding = await this.embeddingService.generateEmbedding(query);
 
     // Build WHERE clauses for filtering
-    const whereClauses: string[] = ['embedding IS NOT NULL'];
+    const whereClauses: string[] = ['embedding_768d IS NOT NULL'];
     const params: any[] = [];
     let paramIndex = 1;
 
@@ -287,14 +287,31 @@ export class PostgreSQLJournalManager {
       params.push(accessible_to_agent);
     }
 
-    const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+    // Add embedding parameter
+    const embeddingParam = this.formatEmbeddingForPgvector(queryEmbedding);
+    params.push(embeddingParam);
+    const embeddingParamIndex = paramIndex++;
+
+    // Add minimum similarity threshold
+    const minSimilarity = options.min_relevance || 0.6;
+    params.push(minSimilarity);
+    const minSimilarityIndex = paramIndex++;
+
+    // Add limit parameter
+    params.push(limit);
+    const limitIndex = paramIndex++;
+
+    const whereClause = whereClauses.join(' AND ');
 
     const sql = `
-      SELECT id, content, timestamp, file_path, agent_id, model_id, 
-             visibility_level, entry_type, searchable_text, sections, embedding
-      FROM ai_memory.journal_entries 
-      ${whereClause}
-      ORDER BY timestamp DESC
+      SELECT id, content, timestamp, file_path, agent_id, model_id,
+             visibility_level, entry_type, searchable_text, sections,
+             1 - (embedding_768d <=> $${embeddingParamIndex}::vector) AS score
+      FROM ai_memory.journal_entries
+      WHERE ${whereClause}
+        AND (1 - (embedding_768d <=> $${embeddingParamIndex}::vector)) >= $${minSimilarityIndex}
+      ORDER BY embedding_768d <=> $${embeddingParamIndex}::vector
+      LIMIT $${limitIndex}
     `;
 
     const client = await this.pool.connect();
@@ -302,46 +319,22 @@ export class PostgreSQLJournalManager {
     try {
       const result = await client.query(sql, params);
 
-      // Calculate similarity scores
-      const results: SearchResult[] = [];
-      for (const row of result.rows) {
-        if (!row.embedding) continue;
+      // Results already sorted by similarity, just map to SearchResult format
+      const results: SearchResult[] = result.rows.map(row => ({
+        id: row.id,
+        content: row.content,
+        timestamp: new Date(row.timestamp),
+        file_path: row.file_path,
+        score: row.score,
+        entry_type: row.entry_type,
+        sections: this.parseJsonSafely(row.sections, []),
+        searchable_text: row.searchable_text,
+        agent_id: row.agent_id,
+        model_id: row.model_id,
+        visibility_level: row.visibility_level,
+      }));
 
-        try {
-          // Convert Buffer back to number array
-          const embeddingArray = Array.from(
-            new Float32Array(
-              row.embedding.buffer,
-              row.embedding.byteOffset,
-              row.embedding.byteLength / 4
-            )
-          );
-          const score = this.embeddingService.cosineSimilarity(queryEmbedding, embeddingArray);
-
-          if (score > 0.1) {
-            // Minimum similarity threshold
-            results.push({
-              id: row.id,
-              content: row.content,
-              timestamp: new Date(row.timestamp),
-              file_path: row.file_path,
-              agent_id: row.agent_id,
-              model_id: row.model_id,
-              visibility_level: row.visibility_level,
-              entry_type: row.entry_type,
-              score,
-              searchable_text: row.searchable_text,
-              sections: this.parseJsonSafely(row.sections, []),
-            });
-          }
-        } catch (error) {
-          console.error(`Failed to process embedding for entry ${row.id}:`, error);
-          continue;
-        }
-      }
-
-      // Sort by similarity score (descending) and limit results
-      return results.sort((a, b) => b.score - a.score).slice(0, limit);
+      return results;
     } finally {
       client.release();
     }
@@ -466,6 +459,10 @@ export class PostgreSQLJournalManager {
       }
       return defaultValue;
     }
+  }
+
+  private formatEmbeddingForPgvector(embedding: number[]): string {
+    return `[${embedding.join(',')}]`;
   }
 
   private formatDate(date: Date): string {
