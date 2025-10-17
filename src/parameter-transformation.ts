@@ -355,13 +355,23 @@ export function extractSemanticParams(params: SemanticSearchInsightsParams): {
 }
 
 /**
+ * Strips YAML frontmatter from text content
+ * Removes everything between --- markers at the start of the text
+ */
+function stripFrontmatter(text: string): string {
+  const frontmatterRegex = /^---\n[\s\S]*?\n---\n/;
+  return text.replace(frontmatterRegex, '').trim();
+}
+
+/**
  * Creates a backward-compatible response format
  * Ensures responses match expected format regardless of source
  */
 export function normalizeSearchResponse(results: any[]): any[] {
   return results.map((result) => {
     const text = result.text || result.content || result.searchable_text || '';
-    const excerpt = result.excerpt || (text ? text.slice(0, 200) : '');
+    const contentWithoutFrontmatter = stripFrontmatter(text);
+    const excerpt = result.excerpt || (contentWithoutFrontmatter ? contentWithoutFrontmatter.slice(0, 200) : '');
 
     return {
       score: result.score || result.similarity_score || 0,
