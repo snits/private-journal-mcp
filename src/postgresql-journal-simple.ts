@@ -94,8 +94,8 @@ export class PostgreSQLJournalManager {
         `
         INSERT INTO ai_memory.journal_entries (
           content, timestamp, date_string, file_path, entry_type,
-          embedding, sections, visibility_level, user_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          embedding_768d, sections, visibility_level, user_id
+        ) VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9)
       `,
         [
           formattedEntry,
@@ -103,8 +103,8 @@ export class PostgreSQLJournalManager {
           dateString,
           filePath,
           'simple',
-          embeddingData.embedding
-            ? Buffer.from(new Float32Array(embeddingData.embedding).buffer)
+          embeddingData.embedding && embeddingData.embedding.length === 768
+            ? this.formatEmbeddingForPgvector(embeddingData.embedding)
             : null,
           JSON.stringify(embeddingData.sections || []),
           'private',
@@ -194,8 +194,8 @@ export class PostgreSQLJournalManager {
         INSERT INTO ai_memory.journal_entries (
           content, timestamp, date_string, file_path, entry_type,
           agent_id, model_id, visibility_level,
-          embedding, sections, user_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+          embedding_768d, sections, user_id
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::vector, $10, $11)
       `,
         [
           formattedEntry,
@@ -206,8 +206,8 @@ export class PostgreSQLJournalManager {
           thoughts.agent_id || null,
           thoughts.model_id || null,
           thoughts.visibility_level || 'private',
-          embeddingData.embedding
-            ? Buffer.from(new Float32Array(embeddingData.embedding).buffer)
+          embeddingData.embedding && embeddingData.embedding.length === 768
+            ? this.formatEmbeddingForPgvector(embeddingData.embedding)
             : null,
           JSON.stringify(embeddingData.sections || []),
           'private-journal-mcp', // Default user_id for private-journal-mcp entries
@@ -462,6 +462,9 @@ export class PostgreSQLJournalManager {
   }
 
   private formatEmbeddingForPgvector(embedding: number[]): string {
+    if (embedding.length !== 768) {
+      throw new Error(`Expected 768-dimensional embedding, got ${embedding.length}`);
+    }
     return `[${embedding.join(',')}]`;
   }
 
