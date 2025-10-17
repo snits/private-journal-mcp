@@ -486,26 +486,7 @@ export class PostgreSQLJournalManager {
   }
 
   private formatEntry(content: string, timestamp: Date): string {
-    const timeDisplay = timestamp.toLocaleTimeString('en-US', {
-      hour12: true,
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-    const dateDisplay = timestamp.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-
-    return `---
-title: "${timeDisplay} - ${dateDisplay}"
-date: ${timestamp.toISOString()}
-timestamp: ${timestamp.getTime()}
----
-
-${content}
-`;
+    return content;
   }
 
   private formatThoughts(
