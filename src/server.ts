@@ -5,7 +5,7 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { ProcessFeelingsRequest, ProcessThoughtsRequest } from './types';
-import { normalizeSearchResponse } from './parameter-transformation';
+import { normalizeSearchResponse, stripFrontmatter } from './parameter-transformation';
 import { SearchService } from './search';
 import { ProjectAwareSearchService } from './project-aware-search';
 import { JournalManagerFactory, JournalManagerInterface } from './journal-manager-factory';
@@ -535,7 +535,7 @@ export class PrivateJournalServer {
             content: [
               {
                 type: 'text',
-                text: content,
+                text: stripFrontmatter(content),
               },
             ],
           };
