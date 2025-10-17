@@ -358,7 +358,7 @@ export function extractSemanticParams(params: SemanticSearchInsightsParams): {
  * Strips YAML frontmatter from text content
  * Removes everything between --- markers at the start of the text
  */
-function stripFrontmatter(text: string): string {
+export function stripFrontmatter(text: string): string {
   const frontmatterRegex = /^---\n[\s\S]*?\n---\n/;
   return text.replace(frontmatterRegex, '').trim();
 }
