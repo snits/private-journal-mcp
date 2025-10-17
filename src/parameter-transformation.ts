@@ -359,7 +359,7 @@ export function extractSemanticParams(params: SemanticSearchInsightsParams): {
  * Removes everything between --- markers at the start of the text
  */
 export function stripFrontmatter(text: string): string {
-  const frontmatterRegex = /^---\n[\s\S]*?\n---\n/;
+  const frontmatterRegex = /^---\r?\n[\s\S]*?\r?\n---\r?\n/;
   return text.replace(frontmatterRegex, '').trim();
 }
 
