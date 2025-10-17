@@ -502,18 +502,6 @@ export class PostgreSQLJournalManager {
     },
     timestamp: Date
   ): string {
-    const timeDisplay = timestamp.toLocaleTimeString('en-US', {
-      hour12: true,
-      hour: 'numeric',
-      minute: '2-digit',
-      second: '2-digit',
-    });
-    const dateDisplay = timestamp.toLocaleDateString('en-US', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    });
-
     const sections = [];
 
     if (thoughts.feelings) {
@@ -536,16 +524,6 @@ export class PostgreSQLJournalManager {
       sections.push(`## World Knowledge\n\n${thoughts.world_knowledge}`);
     }
 
-    return `---
-title: "${timeDisplay} - ${dateDisplay}"
-date: ${timestamp.toISOString()}
-timestamp: ${timestamp.getTime()}
-agent_id: ${thoughts.agent_id || 'unknown'}
-model_id: ${thoughts.model_id || 'unknown'}
-visibility_level: ${thoughts.visibility_level || 'private'}
----
-
-${sections.join('\n\n')}
-`;
+    return sections.join('\n\n');
   }
 }
