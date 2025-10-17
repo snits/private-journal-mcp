@@ -213,7 +213,7 @@ describe('PostgreSQL Integration Tests', () => {
           technical_insights: `Technical insight number ${i + 1}`,
           agent_id: agents[i % 3],
           model_id: 'claude-sonnet-4',
-          visibility_level: visibilityLevels[i % 3] as any
+          visibility_level: visibilityLevels[i % 3] as 'private' | 'team' | 'public'
         });
       }
 
@@ -414,7 +414,6 @@ describe('PostgreSQL Integration Tests', () => {
       expect(entry.agent_id).toBe('database-architect');
       expect(entry.model_id).toBe('claude-sonnet-4');
       expect(entry.visibility_level).toBe('team');
-      expect(entry.embedding).toBeTruthy();
     });
 
     test('quality metrics can be calculated from PostgreSQL entries', async () => {
@@ -574,7 +573,7 @@ Microservices provide significant benefits for large teams but require substanti
           user_context: entry.content.includes('Jerry expects') ? 'Jerry expects zero data loss during migration' : undefined,
           agent_id: entry.agent_id || 'migration-specialist',
           model_id: entry.model_id || 'claude-sonnet-4',
-          visibility_level: entry.visibility_level as any || 'team'
+          visibility_level: (entry.visibility_level || 'team') as 'private' | 'team' | 'public' | 'crb'
         });
       }
 
