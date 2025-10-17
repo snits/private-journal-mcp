@@ -2,7 +2,20 @@ node_modules/
 dist/
 coverage/
 *.log
-.env
+.env*
 .DS_Store
 .vscode/
 .idea/
+.claude/
+
+# Temporary debugging and test scripts
+test-*.js
+debug-*.js
+*-test-*.js
+add_*.js
+check_*.js
+populate_*.js
+sync-backup.js
+test_*.js
+test_*.py
+
