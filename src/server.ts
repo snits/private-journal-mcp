@@ -288,6 +288,14 @@ export class PrivateJournalServer {
                 description:
                   'Show only entries accessible to this agent (considers visibility rules)',
               },
+              project_filter: {
+                type: ['string', 'array'],
+                description:
+                  "Filter by project: 'current' for current project, 'all' for no filtering, project name for specific project, or array of project names. Omit to search all projects.",
+                items: {
+                  type: 'string',
+                },
+              },
             },
             required: ['query'],
           },
@@ -328,6 +336,14 @@ export class PrivateJournalServer {
                 type: 'number',
                 description: 'Number of days back to search (default: 30)',
                 default: 30,
+              },
+              project_filter: {
+                type: ['string', 'array'],
+                description:
+                  "Filter by project: 'current' for current project, 'all' for no filtering, project name for specific project, or array of project names. Omit to search all projects.",
+                items: {
+                  type: 'string',
+                },
               },
             },
             required: [],
@@ -395,6 +411,12 @@ export class PrivateJournalServer {
             typeof args.visibility_level === 'string' ? (args.visibility_level as any) : undefined,
           accessible_to_agent:
             typeof args.accessible_to_agent === 'string' ? args.accessible_to_agent : undefined,
+          project_filter:
+            typeof args.project_filter === 'string'
+              ? args.project_filter
+              : Array.isArray(args.project_filter)
+                ? args.project_filter.filter((p) => typeof p === 'string')
+                : undefined,
         };
 
         try {
@@ -468,6 +490,12 @@ export class PrivateJournalServer {
           limit,
           type,
           dateRange: { start: startDate },
+          project_filter:
+            typeof args?.project_filter === 'string'
+              ? args.project_filter
+              : Array.isArray(args?.project_filter)
+                ? args.project_filter.filter((p) => typeof p === 'string')
+                : undefined,
         };
 
         try {
