@@ -314,10 +314,13 @@ export class PostgreSQLJournalManager {
           params.push(currentContext.project);
         }
       } else if (Array.isArray(project_filter)) {
-        // Multiple projects - use IN clause
-        const placeholders = project_filter.map(() => `$${paramIndex++}`).join(', ');
-        whereClauses.push(`project IN (${placeholders})`);
-        params.push(...project_filter);
+        if (project_filter.length > 0) {
+          // Multiple projects - use IN clause
+          const placeholders = project_filter.map(() => `$${paramIndex++}`).join(', ');
+          whereClauses.push(`project IN (${placeholders})`);
+          params.push(...project_filter);
+        }
+        // If empty array, skip filtering (no matches)
       } else {
         // Single project string
         whereClauses.push(`project = $${paramIndex++}`);
@@ -443,10 +446,13 @@ export class PostgreSQLJournalManager {
           params.push(currentContext.project);
         }
       } else if (Array.isArray(project_filter)) {
-        // Multiple projects - use IN clause
-        const placeholders = project_filter.map(() => `$${paramIndex++}`).join(', ');
-        whereClauses.push(`project IN (${placeholders})`);
-        params.push(...project_filter);
+        if (project_filter.length > 0) {
+          // Multiple projects - use IN clause
+          const placeholders = project_filter.map(() => `$${paramIndex++}`).join(', ');
+          whereClauses.push(`project IN (${placeholders})`);
+          params.push(...project_filter);
+        }
+        // If empty array, skip filtering (no matches)
       } else {
         // Single project string
         whereClauses.push(`project = $${paramIndex++}`);

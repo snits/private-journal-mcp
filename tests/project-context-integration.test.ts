@@ -64,9 +64,17 @@ describe('PostgreSQLJournalManager write operations', () => {
 
     await manager.writeEntry('Test entry with project context');
 
-    // Verify project context was stored (requires database query)
-    // For now, just verify the spy was called
+    // Verify detector was called
     expect(detector.detectProjectContext).toHaveBeenCalledWith(process.cwd());
+
+    // Verify SQL query includes project columns
+    const sqlCall = mockClient.query.mock.calls[0][0];
+    expect(sqlCall).toContain('project, project_context');
+
+    // Verify parameters include project context at correct positions
+    const params = mockClient.query.mock.calls[0][1];
+    expect(params[9]).toBe('private-journal-mcp'); // $10 - project name
+    expect(params[10]).toBe(JSON.stringify(mockContext)); // $11 - serialized context
   });
 
   it('should store project context when writing thoughts', async () => {
@@ -105,6 +113,15 @@ describe('PostgreSQLJournalManager write operations', () => {
     });
 
     expect(detector.detectProjectContext).toHaveBeenCalledWith(process.cwd());
+
+    // Verify SQL includes project columns
+    const sqlCall = mockClient.query.mock.calls[0][0];
+    expect(sqlCall).toContain('project, project_context');
+
+    // Verify parameters include project context
+    const params = mockClient.query.mock.calls[0][1];
+    expect(params[11]).toBe('private-journal-mcp'); // $12 - project name
+    expect(params[12]).toBe(JSON.stringify(mockContext)); // $13 - serialized context
   });
 });
 
@@ -371,5 +388,61 @@ describe('PostgreSQLJournalManager search filtering', () => {
     // Verify SQL includes IN clause
     const sqlCall = mockClient.query.mock.calls[0][0];
     expect(sqlCall).toContain('project IN (');
+  });
+
+  it('should handle empty project array gracefully in searchBySimilarity', async () => {
+    const mockClient = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+      release: vi.fn(),
+    };
+
+    const mockPool = {
+      connect: vi.fn().mockResolvedValue(mockClient),
+    };
+
+    const manager = new PostgreSQLJournalManager();
+    (manager as any).pool = mockPool;
+
+    const results = await manager.searchBySimilarity('test query', {
+      limit: 10,
+      project_filter: [],
+    });
+
+    // Should not crash, should return results (no filter applied)
+    expect(results).toBeDefined();
+    expect(Array.isArray(results)).toBe(true);
+
+    // Verify SQL does NOT include project filter (empty array means skip filter)
+    const sqlCall = mockClient.query.mock.calls[0][0];
+    expect(sqlCall).not.toContain('project IN (');
+    expect(sqlCall).not.toContain('project =');
+  });
+
+  it('should handle empty project array gracefully in listRecent', async () => {
+    const mockClient = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+      release: vi.fn(),
+    };
+
+    const mockPool = {
+      connect: vi.fn().mockResolvedValue(mockClient),
+    };
+
+    const manager = new PostgreSQLJournalManager();
+    (manager as any).pool = mockPool;
+
+    const results = await manager.listRecent({
+      limit: 10,
+      project_filter: [],
+    });
+
+    // Should not crash, should return results (no filter applied)
+    expect(results).toBeDefined();
+    expect(Array.isArray(results)).toBe(true);
+
+    // Verify SQL does NOT include project filter (empty array means skip filter)
+    const sqlCall = mockClient.query.mock.calls[0][0];
+    expect(sqlCall).not.toContain('project IN (');
+    expect(sqlCall).not.toContain('project =');
   });
 });
