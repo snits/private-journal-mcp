@@ -9,7 +9,9 @@ import {
   SearchOptions,
   DatabaseEntry,
   SearchResult,
+  ProjectContext,
 } from './private-journal-types';
+import { ProjectContextDetector } from './project-context.js';
 
 export class PostgreSQLJournalManager {
   private pool!: Pool;
@@ -461,6 +463,50 @@ export class PostgreSQLJournalManager {
         return [jsonString];
       }
       return defaultValue;
+    }
+  }
+
+  /**
+   * Safely detect project context, returning undefined on failure.
+   * Project context is metadata - detection failures should not prevent writes.
+   */
+  private async detectProjectContextSafely(
+    workingDir: string
+  ): Promise<ProjectContext | undefined> {
+    try {
+      const detector = ProjectContextDetector.getInstance();
+      return await detector.detectProjectContext(workingDir);
+    } catch (error) {
+      console.error('Project context detection failed:', error);
+      return undefined;
+    }
+  }
+
+  /**
+   * Serialize project context to JSONB-compatible string.
+   */
+  private serializeProjectContext(context: ProjectContext | undefined): string | null {
+    if (!context) return null;
+
+    try {
+      return JSON.stringify(context);
+    } catch (error) {
+      console.error('Failed to serialize project context:', error);
+      return null;
+    }
+  }
+
+  /**
+   * Parse project context from JSONB string.
+   */
+  private parseProjectContext(json: string | null): ProjectContext | undefined {
+    if (!json) return undefined;
+
+    try {
+      return JSON.parse(json) as ProjectContext;
+    } catch (error) {
+      console.error('Failed to parse project context:', error);
+      return undefined;
     }
   }
 
