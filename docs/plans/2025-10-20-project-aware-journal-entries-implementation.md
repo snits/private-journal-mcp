@@ -68,7 +68,7 @@ Expected: Return to shell
 
 ## Task 2: Add Helper Methods for Project Context
 
-**Subagent to Task:** None
+**Subagent to Task:** general-purpose
 
 **Files:**
 - Modify: `src/postgresql-journal-simple.ts:467-530` (after existing helper methods)
@@ -239,7 +239,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 ## Task 3: Update Write Path - writeEntry Method
 
-**Subagent to Task:** None
+**Subagent to Task:** general-purpose
 
 **Files:**
 - Modify: `src/postgresql-journal-simple.ts:93-113`
@@ -403,7 +403,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 ## Task 4: Update Write Path - writeThoughtsToDatabase Method
 
-**Subagent to Task:** None
+**Subagent to Task:** general-purpose
 
 **Files:**
 - Modify: `src/postgresql-journal-simple.ts:195-221`
@@ -562,7 +562,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 ## Task 5: Update Type Definitions for Search
 
-**Subagent to Task:** None
+**Subagent to Task:** general-purpose
 
 **Files:**
 - Modify: `src/private-journal-types.ts:79-91` (SearchResult interface)
@@ -674,7 +674,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 ## Task 6: Update Search Path - searchBySimilarity Method
 
-**Subagent to Task:** None
+**Subagent to Task:** general-purpose
 
 **Files:**
 - Modify: `src/postgresql-journal-simple.ts:257-344`
@@ -867,7 +867,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 ## Task 7: Update Search Path - listRecent Method
 
-**Subagent to Task:** None
+**Subagent to Task:** general-purpose
 
 **Files:**
 - Modify: `src/postgresql-journal-simple.ts:346-431`
@@ -1018,7 +1018,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 ## Task 8: Update MCP Server Tool Schemas
 
-**Subagent to Task:** None
+**Subagent to Task:** general-purpose
 
 **Files:**
 - Modify: `src/server.ts:245-294` (search_journal tool schema)
@@ -1096,7 +1096,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 ## Task 9: Update MCP Server Request Handlers
 
-**Subagent to Task:** None
+**Subagent to Task:** general-purpose
 
 **Files:**
 - Modify: `src/server.ts:378-426` (search_journal handler)
@@ -1178,7 +1178,7 @@ Co-Authored-By: Claude <noreply@anthropic.com>"
 
 ## Task 10: Update Result Formatting to Display Project
 
-**Subagent to Task:** None
+**Subagent to Task:** general-purpose
 
 **Files:**
 - Modify: `src/parameter-transformation.ts:314-330` (normalizeSearchResponse function)
