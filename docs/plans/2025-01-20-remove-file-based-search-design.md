@@ -222,3 +222,85 @@ These can be added later if needed:
 ## Approval
 
 Approved by Jerry on 2025-01-20 during design brainstorming session.
+
+## Implementation Status
+
+**Completed:** 2025-01-20
+
+### Files Deleted
+
+- src/embeddings.ts (384 lines - local transformer-based embedding service)
+- src/search.ts (420 lines - file-based SearchService with .embedding file loading)
+- src/project-aware-search.ts (300+ lines - wrapper around SearchService)
+- tests/setup.ts (11 lines - mock for deleted @xenova/transformers)
+
+### Files Modified
+
+- **src/server.ts** - Removed file-based search references, simplified to PostgreSQL-only
+  - Removed SearchService and ProjectAwareSearchService imports
+  - Removed instance properties and instantiation
+  - Removed project-aware parameters (project_filter, language_filter, exclude_current, min_relevance)
+  - Simplified search_journal handler to always use PostgreSQL
+  - Net: -90 lines
+
+- **package.json** - Removed unused dependencies
+  - Removed @xenova/transformers (~200MB download)
+  - Removed chromadb (unused for rejected feature)
+
+- **package-lock.json** - Updated dependency tree
+  - Net: -811 lines, -25 packages total
+
+- **src/parameter-transformation.ts** - Removed dead code
+  - Deleted hasProjectAwareParams() function
+  - Removed project-aware parameter validation and sanitization
+  - Net: -55 lines
+
+- **src/types.ts** - Cleaned up type definitions
+  - Removed project_filter, language_filter, exclude_current, min_relevance from SemanticSearchInsightsParams
+  - Removed same fields from SearchOptions
+  - Removed cross_project_warning, project_name, context_match from SearchResult
+  - Net: -11 lines
+
+- **vitest.config.ts** - Updated test configuration
+  - Removed setupFiles reference to deleted tests/setup.ts
+  - Removed embeddings.ts and search.ts from coverage config
+
+- **tests/error-messages.test.ts** - Fixed test cases
+  - Updated test to remove project_filter validation assertions
+
+- **src/postgresql-journal-simple.ts** - Fixed empty entries bug
+  - Fixed hasUserContent check to only examine content fields, not metadata
+  - Prevents creation of empty companion entries
+
+### Test Results
+
+- ✓ All 25 tests passing
+- ✓ TypeScript compilation: SUCCESS
+- ✓ npm install: SUCCESS
+- ✓ npm run build: SUCCESS
+
+### Commits
+
+1. **b492c0c1a918** - refactor: remove file-based search system (894 lines removed)
+2. **2d36d3ff6c8a** - refactor: simplify search to PostgreSQL-only (90 net lines removed)
+3. **d220f90ed221** - chore: remove unused dependencies (811 lines removed)
+4. **490b303b662a** - refactor: remove dead code from parameter types (98 lines removed)
+5. **1f574e4a6d14** - fix: prevent creation of empty user journal entries
+6. **29b1b8f12dda** - test: fix test configuration after cleanup
+
+### Total Impact
+
+- **Lines Removed:** ~1,900 lines total
+- **Packages Removed:** 25 net packages
+- **Bundle Size Reduction:** ~200MB
+- **Architecture:** Single search path (PostgreSQL-only)
+
+### Bonus Fix
+
+Fixed bug where `process_thoughts` created empty user entries when only project_notes was provided. Root cause: hasUserContent check included metadata fields that are always present.
+
+### Branch
+
+- **Branch:** feature/cleanup-file-based-search
+- **Worktree:** ~/.config/superpowers/worktrees/private-journal-mcp/cleanup-file-based-search
+- **Commits:** 6
