@@ -510,13 +510,15 @@ export class PrivateJournalServer {
                 text:
                   results.length > 0
                     ? `Recent entries (last ${days} days):\n\n${results
-                        .map(
-                          (result, i) =>
-                            `${i + 1}. ${result.timestamp.toLocaleDateString()} (${result.type})\n` +
+                        .map((result, i) => {
+                          const projectLabel = result.project ? `[${result.project}]` : '[no project]';
+                          return (
+                            `${i + 1}. ${projectLabel} ${result.timestamp.toLocaleDateString()} (${result.type})\n` +
                             `   Sections: ${result.sections.join(', ')}\n` +
                             `   Path: ${result.path}\n` +
                             `   Excerpt: ${result.excerpt}...\n`
-                        )
+                          );
+                        })
                         .join('\n')}`
                     : `No entries found in the last ${days} days.`,
               },
