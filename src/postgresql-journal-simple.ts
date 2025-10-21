@@ -89,6 +89,9 @@ export class PostgreSQLJournalManager {
       filePath
     );
 
+    // Detect project context (non-blocking on failure)
+    const projectContext = await this.detectProjectContextSafely(process.cwd());
+
     const client = await this.pool.connect();
 
     try {
@@ -96,21 +99,24 @@ export class PostgreSQLJournalManager {
         `
         INSERT INTO ai_memory.journal_entries (
           content, timestamp, date_string, file_path, entry_type,
-          embedding_768d, sections, visibility_level, user_id
-        ) VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9)
+          embedding_768d, sections, visibility_level, user_id,
+          project, project_context
+        ) VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9, $10, $11)
       `,
         [
-          formattedEntry,
-          timestamp,
-          dateString,
-          filePath,
-          'simple',
+          formattedEntry,                                              // $1
+          timestamp,                                                   // $2
+          dateString,                                                  // $3
+          filePath,                                                    // $4
+          'simple',                                                    // $5
           embeddingData.embedding && embeddingData.embedding.length === 768
             ? this.formatEmbeddingForPgvector(embeddingData.embedding)
-            : null,
-          JSON.stringify(embeddingData.sections || []),
-          'private',
-          'private-journal-mcp', // Default user_id for private-journal-mcp entries
+            : null,                                                    // $6
+          JSON.stringify(embeddingData.sections || []),                // $7
+          'private',                                                   // $8
+          'private-journal-mcp',                                       // $9
+          projectContext?.project ?? null,                             // $10
+          this.serializeProjectContext(projectContext),                // $11
         ]
       );
     } finally {
