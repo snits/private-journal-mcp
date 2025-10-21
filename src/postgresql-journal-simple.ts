@@ -269,7 +269,7 @@ export class PostgreSQLJournalManager {
   }
 
   async searchBySimilarity(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
-    const { limit = 10, agent_id, model_id, visibility_level, accessible_to_agent } = options;
+    const { limit = 10, agent_id, model_id, visibility_level, accessible_to_agent, project_filter } = options;
 
     // Generate embedding for query
     const queryEmbedding = await this.embeddingService.generateEmbedding(query);
@@ -304,6 +304,27 @@ export class PostgreSQLJournalManager {
       params.push(accessible_to_agent);
     }
 
+    // Project filtering
+    if (project_filter && project_filter !== 'all') {
+      if (project_filter === 'current') {
+        // Detect current project
+        const currentContext = await this.detectProjectContextSafely(process.cwd());
+        if (currentContext?.project) {
+          whereClauses.push(`project = $${paramIndex++}`);
+          params.push(currentContext.project);
+        }
+      } else if (Array.isArray(project_filter)) {
+        // Multiple projects - use IN clause
+        const placeholders = project_filter.map(() => `$${paramIndex++}`).join(', ');
+        whereClauses.push(`project IN (${placeholders})`);
+        params.push(...project_filter);
+      } else {
+        // Single project string
+        whereClauses.push(`project = $${paramIndex++}`);
+        params.push(project_filter);
+      }
+    }
+
     // Add embedding parameter
     const embeddingParam = this.formatEmbeddingForPgvector(queryEmbedding);
     params.push(embeddingParam);
@@ -323,6 +344,7 @@ export class PostgreSQLJournalManager {
     const sql = `
       SELECT id, content, timestamp, file_path, agent_id, model_id,
              visibility_level, entry_type, searchable_text, sections,
+             project, project_context,
              1 - (embedding_768d <=> $${embeddingParamIndex}::vector) AS score
       FROM ai_memory.journal_entries
       WHERE ${whereClause}
@@ -349,6 +371,8 @@ export class PostgreSQLJournalManager {
         agent_id: row.agent_id,
         model_id: row.model_id,
         visibility_level: row.visibility_level,
+        project: row.project ?? undefined,
+        project_context: this.parseProjectContext(row.project_context),
       }));
 
       return results;
