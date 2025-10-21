@@ -150,10 +150,13 @@ export class PostgreSQLJournalManager {
       await this.writeThoughtsToDatabase(projectThoughts, timestamp, 'project');
     }
 
-    // Write user thoughts if present
-    const hasUserContent = Object.values(userThoughts).some(
-      (value) => value !== undefined && typeof value === 'string'
-    );
+    // Write user thoughts if present (check only content fields, not metadata)
+    const hasUserContent = [
+      userThoughts.feelings,
+      userThoughts.user_context,
+      userThoughts.technical_insights,
+      userThoughts.world_knowledge,
+    ].some((value) => value !== undefined && typeof value === 'string');
     if (hasUserContent) {
       await this.writeThoughtsToDatabase(userThoughts, timestamp, 'user');
     }
