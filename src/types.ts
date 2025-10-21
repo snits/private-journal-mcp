@@ -49,10 +49,6 @@ export interface SemanticSearchInsightsParams {
   model_id?: string;
   visibility_level?: VisibilityLevel;
   accessible_to_agent?: string;
-  project_filter?: string | string[] | 'current' | 'all';
-  language_filter?: string;
-  exclude_current?: boolean;
-  min_relevance?: number;
 }
 
 export interface SearchOptions {
@@ -67,11 +63,6 @@ export interface SearchOptions {
     start?: Date;
     end?: Date;
   };
-  // Project-aware search options
-  project_filter?: string | string[] | 'current' | 'all';
-  language_filter?: string;
-  exclude_current?: boolean;
-  min_relevance?: number;
 }
 
 // Enhanced search options for semantic_search_insights compatibility
@@ -117,8 +108,4 @@ export interface SearchResult {
   agent_id?: string;
   model_id?: string;
   visibility_level?: VisibilityLevel;
-  // Project-aware fields
-  cross_project_warning?: boolean;
-  project_name?: string;
-  context_match?: number;
 }

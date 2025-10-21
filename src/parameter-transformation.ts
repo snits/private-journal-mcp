@@ -25,10 +25,6 @@ export function transformToSemanticSearchParams(
     model_id: searchOptions.model_id,
     visibility_level: searchOptions.visibility_level,
     accessible_to_agent: searchOptions.accessible_to_agent,
-    project_filter: searchOptions.project_filter,
-    language_filter: searchOptions.language_filter,
-    exclude_current: searchOptions.exclude_current,
-    min_relevance: searchOptions.min_relevance,
   };
 
   // Convert dateRange (Date objects) to date_range (ISO strings)
@@ -57,10 +53,6 @@ export function transformFromSemanticSearchParams(
     model_id: params.model_id,
     visibility_level: params.visibility_level,
     accessible_to_agent: params.accessible_to_agent,
-    project_filter: params.project_filter,
-    language_filter: params.language_filter,
-    exclude_current: params.exclude_current,
-    min_relevance: params.min_relevance,
   };
 
   // Convert date_range (ISO strings) to dateRange (Date objects)
@@ -129,17 +121,6 @@ export function validateSemanticSearchParams(params: any): {
     }
   }
 
-  if (params.min_relevance !== undefined) {
-    if (
-      typeof params.min_relevance !== 'number' ||
-      isNaN(params.min_relevance) ||
-      params.min_relevance < 0 ||
-      params.min_relevance > 1
-    ) {
-      errors.push('min_relevance must be a number between 0 and 1');
-    }
-  }
-
   // Enum validation with case normalization
   if (params.type !== undefined) {
     if (typeof params.type !== 'string') {
@@ -200,14 +181,6 @@ export function validateSemanticSearchParams(params: any): {
     }
   }
 
-  if (params.language_filter !== undefined) {
-    if (typeof params.language_filter !== 'string') {
-      errors.push('language_filter must be a string');
-    } else if (params.language_filter.trim() === '') {
-      errors.push('language_filter cannot be empty or only whitespace');
-    }
-  }
-
   // Array validation with content checking
   if (params.sections !== undefined) {
     if (!Array.isArray(params.sections)) {
@@ -229,34 +202,6 @@ export function validateSemanticSearchParams(params: any): {
           errors.push(`sections[${i}] must be one of: ${validSections.join(', ')}`);
         }
       }
-    }
-  }
-
-  // Boolean validation
-  if (params.exclude_current !== undefined && typeof params.exclude_current !== 'boolean') {
-    errors.push('exclude_current must be a boolean');
-  }
-
-  // Complex object validation for project_filter
-  if (params.project_filter !== undefined) {
-    if (typeof params.project_filter === 'string') {
-      const normalizedFilter = params.project_filter.toLowerCase().trim();
-      if (!['current', 'all'].includes(normalizedFilter) && normalizedFilter === '') {
-        errors.push('project_filter string must be "current", "all", or a non-empty project name');
-      }
-    } else if (Array.isArray(params.project_filter)) {
-      if (params.project_filter.length === 0) {
-        errors.push('project_filter array cannot be empty');
-      }
-      for (let i = 0; i < params.project_filter.length; i++) {
-        if (typeof params.project_filter[i] !== 'string') {
-          errors.push(`project_filter[${i}] must be a string`);
-        } else if (params.project_filter[i].trim() === '') {
-          errors.push(`project_filter[${i}] cannot be empty or only whitespace`);
-        }
-      }
-    } else {
-      errors.push('project_filter must be a string, array of strings, "current", or "all"');
     }
   }
 
@@ -314,28 +259,9 @@ export function validateSemanticSearchParams(params: any): {
     model_id: params.model_id?.trim(),
     visibility_level: params.visibility_level?.toLowerCase().trim() as VisibilityLevel,
     accessible_to_agent: params.accessible_to_agent?.trim(),
-    project_filter: Array.isArray(params.project_filter)
-      ? params.project_filter.map((p: string) => p.trim())
-      : params.project_filter?.toLowerCase?.().trim() || params.project_filter,
-    language_filter: params.language_filter?.trim(),
-    exclude_current: params.exclude_current || false,
-    min_relevance: params.min_relevance || 0.6,
   };
 
   return { isValid: true, errors: [], sanitized };
-}
-
-/**
- * Checks if the provided parameters include any project-aware search options
- * Used to determine whether to use ProjectAwareSearchService
- */
-export function hasProjectAwareParams(params: SemanticSearchInsightsParams): boolean {
-  return !!(
-    params.project_filter !== undefined ||
-    params.language_filter !== undefined ||
-    params.exclude_current ||
-    (params.min_relevance !== undefined && params.min_relevance !== 0.6)
-  );
 }
 
 /**
