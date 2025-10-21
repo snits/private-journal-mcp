@@ -389,6 +389,7 @@ export class PostgreSQLJournalManager {
       visibility_level,
       accessible_to_agent,
       dateRange,
+      project_filter,
     } = options;
 
     // Build WHERE clauses for filtering
@@ -432,12 +433,34 @@ export class PostgreSQLJournalManager {
       }
     }
 
+    // Project filtering
+    if (project_filter && project_filter !== 'all') {
+      if (project_filter === 'current') {
+        // Detect current project
+        const currentContext = await this.detectProjectContextSafely(process.cwd());
+        if (currentContext?.project) {
+          whereClauses.push(`project = $${paramIndex++}`);
+          params.push(currentContext.project);
+        }
+      } else if (Array.isArray(project_filter)) {
+        // Multiple projects - use IN clause
+        const placeholders = project_filter.map(() => `$${paramIndex++}`).join(', ');
+        whereClauses.push(`project IN (${placeholders})`);
+        params.push(...project_filter);
+      } else {
+        // Single project string
+        whereClauses.push(`project = $${paramIndex++}`);
+        params.push(project_filter);
+      }
+    }
+
     const whereClause = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
 
     const sql = `
-      SELECT id, content, timestamp, file_path, agent_id, model_id, 
-             visibility_level, entry_type, searchable_text, sections
-      FROM ai_memory.journal_entries 
+      SELECT id, content, timestamp, file_path, agent_id, model_id,
+             visibility_level, entry_type, searchable_text, sections,
+             project, project_context
+      FROM ai_memory.journal_entries
       ${whereClause}
       ORDER BY timestamp DESC
       LIMIT $${paramIndex}
@@ -462,6 +485,8 @@ export class PostgreSQLJournalManager {
         score: 1, // No similarity score for recent entries
         searchable_text: row.searchable_text,
         sections: this.parseJsonSafely(row.sections, []),
+        project: row.project ?? undefined,
+        project_context: this.parseProjectContext(row.project_context),
       }));
     } finally {
       client.release();

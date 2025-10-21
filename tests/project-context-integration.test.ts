@@ -263,4 +263,113 @@ describe('PostgreSQLJournalManager search filtering', () => {
     expect(sqlCall).not.toContain('project =');
     expect(sqlCall).not.toContain('project IN');
   });
+
+  it('should filter listRecent results by specific project name', async () => {
+    const mockClient = {
+      query: vi.fn().mockResolvedValue({
+        rows: [
+          {
+            id: 1,
+            content: 'Test recent entry',
+            timestamp: new Date(),
+            file_path: '/test/path',
+            entry_type: 'thoughts',
+            sections: JSON.stringify(['project_notes']),
+            searchable_text: 'Test recent entry',
+            agent_id: 'test-agent',
+            model_id: 'test-model',
+            visibility_level: 'private',
+            project: 'test-project',
+            project_context: JSON.stringify({
+              project: 'test-project',
+              working_directory: '/test/dir',
+              context_hash: 'abc123',
+              timestamp: new Date().toISOString(),
+              confidence: 'high',
+            }),
+          },
+        ],
+      }),
+      release: vi.fn(),
+    };
+
+    const mockPool = {
+      connect: vi.fn().mockResolvedValue(mockClient),
+    };
+
+    const manager = new PostgreSQLJournalManager();
+    (manager as any).pool = mockPool;
+
+    const results = await manager.listRecent({
+      project_filter: 'test-project',
+    });
+
+    expect(results).toHaveLength(1);
+    expect(results[0].project).toBe('test-project');
+    expect(results[0].project_context).toBeDefined();
+    expect(results[0].project_context?.project).toBe('test-project');
+
+    // Verify SQL includes project filter
+    const sqlCall = mockClient.query.mock.calls[0][0];
+    expect(sqlCall).toContain('project = ');
+  });
+
+  it('should filter listRecent by current project using detector', async () => {
+    const mockClient = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+      release: vi.fn(),
+    };
+
+    const mockPool = {
+      connect: vi.fn().mockResolvedValue(mockClient),
+    };
+
+    const manager = new PostgreSQLJournalManager();
+    (manager as any).pool = mockPool;
+
+    // Mock the detector to return predictable context
+    const detector = ProjectContextDetector.getInstance();
+    const mockContext = {
+      project: 'current-project',
+      working_directory: process.cwd(),
+      context_hash: 'current123',
+      timestamp: new Date().toISOString(),
+      confidence: 'high' as const,
+    };
+
+    vi.spyOn(detector, 'detectProjectContext').mockResolvedValue(mockContext);
+
+    await manager.listRecent({
+      project_filter: 'current',
+    });
+
+    // Verify detector was called
+    expect(detector.detectProjectContext).toHaveBeenCalledWith(process.cwd());
+
+    // Verify SQL includes project filter
+    const sqlCall = mockClient.query.mock.calls[0][0];
+    expect(sqlCall).toContain('project = ');
+  });
+
+  it('should filter listRecent by multiple projects using IN clause', async () => {
+    const mockClient = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+      release: vi.fn(),
+    };
+
+    const mockPool = {
+      connect: vi.fn().mockResolvedValue(mockClient),
+    };
+
+    const manager = new PostgreSQLJournalManager();
+    (manager as any).pool = mockPool;
+
+    await manager.listRecent({
+      project_filter: ['project-a', 'project-b', 'project-c'],
+    });
+
+    // Verify SQL includes IN clause
+    const sqlCall = mockClient.query.mock.calls[0][0];
+    expect(sqlCall).toContain('project IN (');
+  });
 });
