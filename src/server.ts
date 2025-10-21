@@ -6,8 +6,6 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { ProcessFeelingsRequest, ProcessThoughtsRequest } from './types';
 import { normalizeSearchResponse, stripFrontmatter } from './parameter-transformation';
-import { SearchService } from './search';
-import { ProjectAwareSearchService } from './project-aware-search';
 import { JournalManagerFactory, JournalManagerInterface } from './journal-manager-factory';
 import { createDatabaseConfig } from './database-config';
 
@@ -164,8 +162,6 @@ function sanitizeErrorMessage(error: string): string {
 export class PrivateJournalServer {
   private server: Server;
   private journalManager: JournalManagerInterface;
-  private searchService: SearchService;
-  private projectAwareSearch: ProjectAwareSearchService;
   private defaultModelId: string;
   private defaultAgentId: string;
 
@@ -181,8 +177,6 @@ export class PrivateJournalServer {
     const dbConfig = managerType === 'postgresql' ? createDatabaseConfig() : undefined;
     this.journalManager = JournalManagerFactory.create(managerType, journalPath, dbConfig);
 
-    this.searchService = new SearchService(journalPath);
-    this.projectAwareSearch = new ProjectAwareSearchService(journalPath);
     this.server = new Server({
       name: 'private-journal-mcp',
       version: '1.0.0',
@@ -294,33 +288,6 @@ export class PrivateJournalServer {
                 description:
                   'Show only entries accessible to this agent (considers visibility rules)',
               },
-              // Project context filtering options
-              project_filter: {
-                oneOf: [
-                  { type: 'string', enum: ['current', 'all'] },
-                  { type: 'string' },
-                  { type: 'array', items: { type: 'string' } },
-                ],
-                description:
-                  "Filter by project context: 'current' (auto-detect), 'all', specific project name(s)",
-              },
-              language_filter: {
-                type: 'string',
-                description: 'Filter by primary programming language',
-              },
-              exclude_current: {
-                type: 'boolean',
-                description: 'Exclude current project from results (default: false)',
-                default: false,
-              },
-              min_relevance: {
-                type: 'number',
-                description:
-                  'Minimum relevance score for cross-project results (0.0-1.0, default: 0.6)',
-                default: 0.6,
-                minimum: 0.0,
-                maximum: 1.0,
-              },
             },
             required: ['query'],
           },
@@ -428,87 +395,30 @@ export class PrivateJournalServer {
             typeof args.visibility_level === 'string' ? (args.visibility_level as any) : undefined,
           accessible_to_agent:
             typeof args.accessible_to_agent === 'string' ? args.accessible_to_agent : undefined,
-          // New project-aware options
-          project_filter:
-            typeof args.project_filter === 'string'
-              ? args.project_filter
-              : Array.isArray(args.project_filter)
-                ? args.project_filter
-                : undefined,
-          language_filter:
-            typeof args.language_filter === 'string' ? args.language_filter : undefined,
-          exclude_current: typeof args.exclude_current === 'boolean' ? args.exclude_current : false,
-          min_relevance: typeof args.min_relevance === 'number' ? args.min_relevance : 0.6,
         };
 
         try {
-          // Use project-aware search if any project-specific options are provided
-          const useProjectAwareSearch =
-            options.project_filter !== undefined ||
-            options.language_filter !== undefined ||
-            options.exclude_current ||
-            options.min_relevance !== 0.6;
-
-          if (useProjectAwareSearch) {
-            const rawResults = await this.projectAwareSearch.search(args.query, options);
-            const results = normalizeSearchResponse(rawResults);
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text:
-                    results.length > 0
-                      ? `Found ${results.length} relevant entries:\n\n${results
-                          .map((result, i) => {
-                            const contextWarning = result.cross_project_warning
-                              ? ` ⚠️  [${result.project_name || 'other project'}]`
-                              : '';
-                            const contextMatch =
-                              result.context_match < 0.8
-                                ? ` (context: ${(result.context_match * 100).toFixed(0)}%)`
-                                : '';
-
-                            const timestampDisplay = result.timestamp
-                              ? typeof result.timestamp === 'number'
-                                ? new Date(result.timestamp).toLocaleDateString()
-                                : new Date(result.timestamp).toLocaleDateString()
-                              : 'Unknown date';
-                            return (
-                              `${i + 1}. [Score: ${result.score.toFixed(3)}${contextMatch}]${contextWarning} ${timestampDisplay} (${result.type})\n` +
-                              `   Sections: ${result.sections.join(', ')}\n` +
-                              `   Path: ${result.path}\n` +
-                              `   Excerpt: ${result.excerpt}...\n`
-                            );
-                          })
-                          .join('\n')}`
-                      : 'No relevant entries found.',
-                },
-              ],
-            };
-          } else {
-            // Fall back to traditional search for backwards compatibility
-            const rawResults = await this.journalManager.searchBySimilarity(args.query, options);
-            const results = normalizeSearchResponse(rawResults);
-            return {
-              content: [
-                {
-                  type: 'text',
-                  text:
-                    results.length > 0
-                      ? `Found ${results.length} relevant entries:\n\n${results
-                          .map(
-                            (result, i) =>
-                              `${i + 1}. [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} (${result.type})\n` +
-                              `   Sections: ${result.sections.join(', ')}\n` +
-                              `   Path: ${result.path}\n` +
-                              `   Excerpt: ${result.excerpt}...\n`
-                          )
-                          .join('\n')}`
-                      : 'No relevant entries found.',
-                },
-              ],
-            };
-          }
+          const rawResults = await this.journalManager.searchBySimilarity(args.query, options);
+          const results = normalizeSearchResponse(rawResults);
+          return {
+            content: [
+              {
+                type: 'text',
+                text:
+                  results.length > 0
+                    ? `Found ${results.length} relevant entries:\n\n${results
+                        .map(
+                          (result, i) =>
+                            `${i + 1}. [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} (${result.type})\n` +
+                            `   Sections: ${result.sections.join(', ')}\n` +
+                            `   Path: ${result.path}\n` +
+                            `   Excerpt: ${result.excerpt}...\n`
+                        )
+                        .join('\n')}`
+                    : 'No relevant entries found.',
+              },
+            ],
+          };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
           throw new Error(`Failed to search journal: ${errorMessage}`);
