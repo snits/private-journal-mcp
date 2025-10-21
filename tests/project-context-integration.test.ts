@@ -68,4 +68,42 @@ describe('PostgreSQLJournalManager write operations', () => {
     // For now, just verify the spy was called
     expect(detector.detectProjectContext).toHaveBeenCalledWith(process.cwd());
   });
+
+  it('should store project context when writing thoughts', async () => {
+    // Mock database connection
+    const mockClient = {
+      query: vi.fn().mockResolvedValue({ rows: [] }),
+      release: vi.fn(),
+    };
+
+    const mockPool = {
+      connect: vi.fn().mockResolvedValue(mockClient),
+    };
+
+    const manager = new PostgreSQLJournalManager();
+    (manager as any).pool = mockPool;
+
+    // Mock the detector to return predictable context
+    const detector = ProjectContextDetector.getInstance();
+    const mockContext = {
+      project: 'private-journal-mcp',
+      working_directory: process.cwd(),
+      git_remote: 'git@github.com:user/private-journal-mcp.git',
+      branch: 'feature/project-aware',
+      primary_language: 'typescript',
+      context_hash: 'test456',
+      timestamp: new Date().toISOString(),
+      confidence: 'high' as const,
+    };
+
+    vi.spyOn(detector, 'detectProjectContext').mockResolvedValue(mockContext);
+
+    await manager.writeThoughts({
+      project_notes: 'Test project note',
+      agent_id: 'test-agent',
+      model_id: 'test-model',
+    });
+
+    expect(detector.detectProjectContext).toHaveBeenCalledWith(process.cwd());
+  });
 });

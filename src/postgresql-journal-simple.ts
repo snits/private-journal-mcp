@@ -197,6 +197,9 @@ export class PostgreSQLJournalManager {
       filePath
     );
 
+    // Detect project context (non-blocking on failure)
+    const projectContext = await this.detectProjectContextSafely(process.cwd());
+
     const client = await this.pool.connect();
 
     try {
@@ -205,23 +208,26 @@ export class PostgreSQLJournalManager {
         INSERT INTO ai_memory.journal_entries (
           content, timestamp, date_string, file_path, entry_type,
           agent_id, model_id, visibility_level,
-          embedding_768d, sections, user_id
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::vector, $10, $11)
+          embedding_768d, sections, user_id,
+          project, project_context
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::vector, $10, $11, $12, $13)
       `,
         [
-          formattedEntry,
-          timestamp,
-          dateString,
-          filePath,
-          'thoughts',
-          thoughts.agent_id || null,
-          thoughts.model_id || null,
-          thoughts.visibility_level || 'private',
+          formattedEntry,                                              // $1
+          timestamp,                                                   // $2
+          dateString,                                                  // $3
+          filePath,                                                    // $4
+          'thoughts',                                                  // $5
+          thoughts.agent_id ?? null,                                   // $6
+          thoughts.model_id ?? null,                                   // $7
+          thoughts.visibility_level ?? 'private',                      // $8
           embeddingData.embedding && embeddingData.embedding.length === 768
             ? this.formatEmbeddingForPgvector(embeddingData.embedding)
-            : null,
-          JSON.stringify(embeddingData.sections || []),
-          'private-journal-mcp', // Default user_id for private-journal-mcp entries
+            : null,                                                    // $9
+          JSON.stringify(embeddingData.sections || []),                // $10
+          'private-journal-mcp',                                       // $11
+          projectContext?.project ?? null,                             // $12
+          this.serializeProjectContext(projectContext),                // $13
         ]
       );
     } finally {
