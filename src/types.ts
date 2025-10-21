@@ -1,6 +1,8 @@
 // ABOUTME: Type definitions for the private journal MCP server
 // ABOUTME: Defines interfaces for journal entries and configuration
 
+import { ProjectContext } from './private-journal-types';
+
 export type VisibilityLevel = 'private' | 'public' | 'team' | 'crb';
 
 export interface JournalEntry {
@@ -63,6 +65,7 @@ export interface SearchOptions {
     start?: Date;
     end?: Date;
   };
+  project_filter?: 'current' | 'all' | string | string[];
 }
 
 // Enhanced search options for semantic_search_insights compatibility
@@ -108,4 +111,6 @@ export interface SearchResult {
   agent_id?: string;
   model_id?: string;
   visibility_level?: VisibilityLevel;
+  project?: string;
+  project_context?: ProjectContext;
 }

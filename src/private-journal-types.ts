@@ -88,6 +88,8 @@ export interface SearchResult {
   score: number;
   searchable_text?: string;
   sections: string[];
+  project?: string;
+  project_context?: ProjectContext;
 }
 
 export interface EmbeddingData {
