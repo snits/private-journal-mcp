@@ -315,6 +315,8 @@ export function normalizeSearchResponse(results: any[]): any[] {
       ...(result.cross_project_warning && { cross_project_warning: result.cross_project_warning }),
       ...(result.project_name && { project_name: result.project_name }),
       ...(result.context_match && { context_match: result.context_match }),
+      ...(result.project && { project: result.project }),
+      ...(result.project_context && { project_context: result.project_context }),
     };
   });
 }

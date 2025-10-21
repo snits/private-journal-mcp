@@ -429,13 +429,15 @@ export class PrivateJournalServer {
                 text:
                   results.length > 0
                     ? `Found ${results.length} relevant entries:\n\n${results
-                        .map(
-                          (result, i) =>
-                            `${i + 1}. [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} (${result.type})\n` +
+                        .map((result, i) => {
+                          const projectLabel = result.project ? `[${result.project}]` : '[no project]';
+                          return (
+                            `${i + 1}. ${projectLabel} [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} (${result.type})\n` +
                             `   Sections: ${result.sections.join(', ')}\n` +
                             `   Path: ${result.path}\n` +
                             `   Excerpt: ${result.excerpt}...\n`
-                        )
+                          );
+                        })
                         .join('\n')}`
                     : 'No relevant entries found.',
               },
