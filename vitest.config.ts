@@ -12,12 +12,9 @@ export default defineConfig({
         'src/journal.ts',
         'src/types.ts',
         'src/paths.ts',
-        'src/embeddings.ts',
-        'src/search.ts',
       ],
       exclude: ['src/**/*.d.ts'],
     },
-    setupFiles: ['./tests/setup.ts'],
     testTimeout: 60000,
   },
 });

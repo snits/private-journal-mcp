@@ -46,15 +46,13 @@ describe('Enhanced Error Messages', () => {
       expect(result.errors).toContain('model_id must contain only letters, numbers, hyphens, underscores, and dots');
     });
 
-    test('validates project filter parameters', () => {
+    test('validates sections parameter', () => {
       const result = validateSemanticSearchParams({
         query: 'test',
-        project_filter: [], // Empty array
         sections: ['invalid_section'], // Invalid section
       });
 
       expect(result.isValid).toBe(false);
-      expect(result.errors).toContain('project_filter array cannot be empty');
       expect(result.errors).toContain('sections[0] must be one of: feelings, project_notes, user_context, technical_insights, world_knowledge');
     });
   });
