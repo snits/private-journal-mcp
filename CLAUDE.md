@@ -62,11 +62,13 @@ The server provides comprehensive journaling and search capabilities through the
 - `process_thoughts` - Multi-section private journaling with categories for feelings, project notes, user context, technical insights, and world knowledge
 
 **Search & Retrieval:**
-- `search_journal` - Natural language semantic search across all journal entries using local AI embeddings
+- `search_journal` - Natural language semantic search with optional project filtering
+  - New: `project_filter` parameter supports 'current', project name, or array of projects
 - `read_journal_entry` - Read full content of specific entries by file path
-- `list_recent_entries` - Browse recent entries chronologically with date filtering
+- `list_recent_entries` - Browse recent entries with optional project filtering
 
 **Key Features:**
+- **Project Awareness**: Automatic project detection from git context, filter searches by project
 - **Dual Storage**: Project notes stored locally with codebase, personal thoughts in user's home directory
 - **Local AI Search**: Uses @xenova/transformers for semantic understanding without external API calls
 - **Automatic Indexing**: Embeddings generated automatically for all entries on first startup and ongoing writes
