@@ -57,7 +57,7 @@ async function regenerateEmbeddings(
     const query = `
       SELECT id, content, file_path
       FROM ai_memory.journal_entries
-      ${missingOnly ? 'WHERE embedding IS NULL' : ''}
+      ${missingOnly ? 'WHERE embedding_768d IS NULL' : ''}
       ORDER BY timestamp DESC
       ${limit ? `LIMIT ${limit}` : ''}
     `;
@@ -99,7 +99,7 @@ async function regenerateEmbeddings(
           }
 
           const startTime = Date.now();
-          const embedding = await embeddingService.generateEmbedding(text);
+          const embedding = await embeddingService.generateDocumentEmbedding(text);
           const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 
           if (!embedding || embedding.length === 0) {
@@ -108,12 +108,11 @@ async function regenerateEmbeddings(
             continue;
           }
 
-          // Convert to Buffer for PostgreSQL bytea storage
-          const embeddingBuffer = Buffer.from(new Float32Array(embedding).buffer);
+          const embeddingVector = `[${embedding.join(',')}]`;
 
           await pool.query(
-            'UPDATE ai_memory.journal_entries SET embedding = $1 WHERE id = $2',
-            [embeddingBuffer, entry.id]
+            'UPDATE ai_memory.journal_entries SET embedding_768d = $1::vector WHERE id = $2',
+            [embeddingVector, entry.id]
           );
 
           processed++;
@@ -142,7 +141,7 @@ async function regenerateEmbeddings(
           // Generate embeddings in batch
           console.log(`  Generating embeddings...`);
           const startTime = Date.now();
-          const embeddings = await embeddingService.generateBatch(texts);
+          const embeddings = await embeddingService.generateDocumentBatch(texts);
           const duration = ((Date.now() - startTime) / 1000).toFixed(2);
           console.log(`  Generated ${embeddings.length} embeddings in ${duration}s`);
 
@@ -161,12 +160,11 @@ async function regenerateEmbeddings(
                 continue;
               }
 
-              // Convert to Buffer for PostgreSQL bytea storage
-              const embeddingBuffer = Buffer.from(new Float32Array(embedding).buffer);
+              const embeddingVector = `[${embedding.join(',')}]`;
 
               await client.query(
-                'UPDATE ai_memory.journal_entries SET embedding = $1 WHERE id = $2',
-                [embeddingBuffer, entry.id]
+                'UPDATE ai_memory.journal_entries SET embedding_768d = $1::vector WHERE id = $2',
+                [embeddingVector, entry.id]
               );
 
               processed++;

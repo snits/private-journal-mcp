@@ -251,7 +251,7 @@ export class PostgreSQLJournalManager {
         };
       }
 
-      const embedding = await this.embeddingService.generateEmbedding(text);
+      const embedding = await this.embeddingService.generateDocumentEmbedding(text);
 
       return {
         embedding,
@@ -272,7 +272,7 @@ export class PostgreSQLJournalManager {
     const { limit = 10, agent_id, model_id, visibility_level, accessible_to_agent, project_filter } = options;
 
     // Generate embedding for query
-    const queryEmbedding = await this.embeddingService.generateEmbedding(query);
+    const queryEmbedding = await this.embeddingService.generateQueryEmbedding(query);
 
     // Build WHERE clauses for filtering
     const whereClauses: string[] = ['embedding_768d IS NOT NULL'];

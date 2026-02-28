@@ -94,6 +94,18 @@ export class OpenAIEmbeddingService {
     }
   }
 
+  async generateDocumentEmbedding(text: string): Promise<number[]> {
+    return this.generateEmbedding(`search_document: ${text}`);
+  }
+
+  async generateQueryEmbedding(text: string): Promise<number[]> {
+    return this.generateEmbedding(`search_query: ${text}`);
+  }
+
+  async generateDocumentBatch(texts: string[]): Promise<number[][]> {
+    return this.generateBatch(texts.map(t => `search_document: ${t}`));
+  }
+
   async generateBatch(texts: string[]): Promise<number[][]> {
     if (texts.length === 0) {
       return [];
