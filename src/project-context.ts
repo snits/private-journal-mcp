@@ -164,6 +164,9 @@ export class ProjectContextDetector {
     // https://github.com/user/repo.git -> repo
     // git@github.com:user/repo.git -> repo
     // https://github.com/user/repo -> repo
+    // jsnitsel@cantor:/home/jsnitsel/claudes-home/ -> claudes-home
+
+    const url = remoteUrl.replace(/\/+$/, '');
 
     const patterns = [
       /github\.com[:/][\w-]+\/([\w-]+)(?:\.git)?$/,
@@ -173,14 +176,14 @@ export class ProjectContextDetector {
     ];
 
     for (const pattern of patterns) {
-      const match = remoteUrl.match(pattern);
+      const match = url.match(pattern);
       if (match) {
         return match[1];
       }
     }
 
     // Last resort - extract from URL path
-    const urlParts = remoteUrl.split('/');
+    const urlParts = url.split('/');
     const lastPart = urlParts[urlParts.length - 1];
     return lastPart.replace(/\.git$/, '') || 'unknown-repo';
   }
