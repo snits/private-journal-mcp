@@ -19,3 +19,8 @@ sync-backup.js
 test_*.js
 test_*.py
 
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
