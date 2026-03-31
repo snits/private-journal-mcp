@@ -49,7 +49,7 @@ export class TextGenerationClient {
         throw new Error(`Text generation API error (${response.status}): ${errorText}`);
       }
 
-      const data = await response.json();
+      const data: any = await response.json();
       const content = data.choices?.[0]?.message?.content;
 
       if (!content) {
