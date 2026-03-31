@@ -424,6 +424,16 @@ export class PrivateJournalServer {
                   results.length > 0
                     ? `Found ${results.length} relevant entries:\n\n${results
                         .map((result, i) => {
+                          if (result.source === 'distillation') {
+                            return (
+                              `${i + 1}. [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} [distillation]\n` +
+                              `   Title: ${result.title}\n` +
+                              `   Summary: ${result.summary}\n` +
+                              `   Key Insights:\n${result.key_insights.map((k: string) => `     - ${k}`).join('\n')}\n` +
+                              `   Category: ${result.category}\n` +
+                              `   Source entry: ${result.path}\n`
+                            );
+                          }
                           const projectLabel = result.project ? `[${result.project}]` : '[no project]';
                           return (
                             `${i + 1}. ${projectLabel} [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} (${result.type})\n` +

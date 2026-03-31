@@ -12,9 +12,26 @@ export function stripFrontmatter(text: string): string {
 
 /**
  * Normalizes search results into a consistent format for MCP responses.
+ * Handles both entry and distillation results (discriminated by result.source).
  */
 export function normalizeSearchResponse(results: any[]): any[] {
   return results.map((result) => {
+    if (result.source === 'distillation') {
+      return {
+        score: result.score || 0,
+        path: result.source_entry_path || '',
+        title: result.title,
+        summary: result.summary,
+        key_insights: result.key_insights,
+        category: result.category,
+        timestamp: result.timestamp || new Date(),
+        type: 'distillation',
+        sections: [],
+        source: 'distillation',
+        source_entry_id: result.source_entry_id,
+      };
+    }
+
     const text = result.text || result.content || result.searchable_text || '';
     const contentWithoutFrontmatter = stripFrontmatter(text);
     const excerpt = result.excerpt || (contentWithoutFrontmatter ? contentWithoutFrontmatter.slice(0, 200) : '');
@@ -27,6 +44,7 @@ export function normalizeSearchResponse(results: any[]): any[] {
       timestamp: result.timestamp || result.created_at || new Date(),
       type: result.type || result.entry_type || 'unknown',
       sections: result.sections || [],
+      source: 'entry',
       ...(result.agent_id && { agent_id: result.agent_id }),
       ...(result.model_id && { model_id: result.model_id }),
       ...(result.visibility_level && { visibility_level: result.visibility_level }),
