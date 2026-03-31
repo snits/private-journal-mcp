@@ -9,9 +9,9 @@ export default defineConfig({
       provider: 'v8',
       reporter: ['text', 'lcov'],
       include: [
-        'src/journal.ts',
         'src/types.ts',
-        'src/paths.ts',
+        'src/response-formatting.ts',
+        'src/postgresql-journal-simple.ts',
       ],
       exclude: ['src/**/*.d.ts'],
     },

@@ -1,5 +1,5 @@
-// ABOUTME: Type definitions for private-journal-mcp compatibility layer
-// ABOUTME: Ensures identical API surface between SQLite and PostgreSQL implementations
+// ABOUTME: Core type definitions for the journal data model
+// ABOUTME: Defines database records, search results, and project context
 
 export type VisibilityLevel = 'private' | 'public' | 'team' | 'crb';
 
@@ -56,7 +56,7 @@ export interface SearchOptions {
   min_relevance?: number; // Minimum relevance score for cross-project results
 }
 
-// Database types matching SQLite schema
+// Database record types
 export interface DatabaseEntry {
   id: number;
   content: string;
@@ -99,3 +99,60 @@ export interface EmbeddingData {
   timestamp: number;
   path: string;
 }
+
+// Distillation types
+
+export interface DistillationResult {
+  title: string;
+  summary: string;
+  keyInsights: string[];
+  category: string;
+}
+
+export interface DistillationSummary {
+  entriesFound: number;
+  entriesSkipped: number;
+  distillationsCreated: number;
+  errors: number;
+  titles: string[];
+}
+
+export interface DistillationOptions {
+  daysBack: number;
+  category?: string;
+  limit?: number;
+}
+
+// Discriminated union for merged search results
+
+export interface EntrySearchResult {
+  source: 'entry';
+  id: number;
+  content: string;
+  file_path: string;
+  entry_type: string;
+  sections: string[];
+  score: number;
+  timestamp: Date;
+  agent_id?: string;
+  model_id?: string;
+  visibility_level?: VisibilityLevel;
+  project?: string;
+  project_context?: ProjectContext;
+  searchable_text?: string;
+}
+
+export interface DistillationSearchResult {
+  source: 'distillation';
+  id: string;
+  title: string;
+  summary: string;
+  key_insights: string[];
+  category: string;
+  score: number;
+  timestamp: Date;
+  source_entry_id: number;
+  source_entry_path?: string;
+}
+
+export type MergedSearchResult = EntrySearchResult | DistillationSearchResult;

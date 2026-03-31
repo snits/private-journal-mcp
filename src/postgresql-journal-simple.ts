@@ -1,5 +1,5 @@
-// ABOUTME: Simplified PostgreSQL journal manager maintaining API compatibility with SQLite version
-// ABOUTME: Self-contained implementation for private-journal-mcp without external dependencies
+// ABOUTME: PostgreSQL journal manager with pgvector semantic search
+// ABOUTME: Handles all read/write operations against the ai_memory schema
 
 import { Pool, PoolClient } from 'pg';
 import { DatabaseConfig, createDatabaseConfig } from './database-config';
@@ -10,17 +10,23 @@ import {
   DatabaseEntry,
   SearchResult,
   ProjectContext,
+  EntrySearchResult,
+  DistillationSearchResult,
+  MergedSearchResult,
 } from './private-journal-types';
 import { ProjectContextDetector } from './project-context.js';
+import { extractCategory } from './distillation/category-extraction';
 
 export class PostgreSQLJournalManager {
   private pool!: Pool;
   private embeddingService: EmbeddingService;
   private config: DatabaseConfig;
+  private userId: string;
 
   constructor(config?: Partial<DatabaseConfig>) {
     this.config = { ...createDatabaseConfig(), ...config };
     this.embeddingService = EmbeddingService.getInstance();
+    this.userId = process.env.USER_ID || 'mnemosyne';
   }
 
   async initialize(): Promise<void> {
@@ -34,7 +40,7 @@ export class PostgreSQLJournalManager {
       max: this.config.maxConnections,
       idleTimeoutMillis: this.config.idleTimeoutMs,
       connectionTimeoutMillis: this.config.connectionTimeoutMs,
-      application_name: 'private-journal-postgresql',
+      application_name: 'mnemosyne',
     });
 
     // Test connection
@@ -100,8 +106,8 @@ export class PostgreSQLJournalManager {
         INSERT INTO ai_memory.journal_entries (
           content, timestamp, date_string, file_path, entry_type,
           embedding_768d, sections, visibility_level, user_id,
-          project, project_context
-        ) VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9, $10, $11)
+          project, project_context, category
+        ) VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9, $10, $11, $12)
       `,
         [
           formattedEntry,                                              // $1
@@ -114,9 +120,10 @@ export class PostgreSQLJournalManager {
             : null,                                                    // $6
           JSON.stringify(embeddingData.sections || []),                // $7
           'private',                                                   // $8
-          'private-journal-mcp',                                       // $9
+          this.userId,                                                   // $9
           projectContext?.project ?? null,                             // $10
           this.serializeProjectContext(projectContext),                // $11
+          extractCategory(embeddingData.sections, 'general'),         // $12
         ]
       );
     } finally {
@@ -209,8 +216,8 @@ export class PostgreSQLJournalManager {
           content, timestamp, date_string, file_path, entry_type,
           agent_id, model_id, visibility_level,
           embedding_768d, sections, user_id,
-          project, project_context
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::vector, $10, $11, $12, $13)
+          project, project_context, category
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::vector, $10, $11, $12, $13, $14)
       `,
         [
           formattedEntry,                                              // $1
@@ -225,9 +232,10 @@ export class PostgreSQLJournalManager {
             ? this.formatEmbeddingForPgvector(embeddingData.embedding)
             : null,                                                    // $9
           JSON.stringify(embeddingData.sections || []),                // $10
-          'private-journal-mcp',                                       // $11
+          this.userId,                                                   // $11
           projectContext?.project ?? null,                             // $12
           this.serializeProjectContext(projectContext),                // $13
+          extractCategory(embeddingData.sections, type === 'project' ? 'technical' : null), // $14
         ]
       );
     } finally {
@@ -268,7 +276,7 @@ export class PostgreSQLJournalManager {
     }
   }
 
-  async searchBySimilarity(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
+  async searchBySimilarity(query: string, options: SearchOptions = {}): Promise<MergedSearchResult[]> {
     const { limit = 10, agent_id, model_id, visibility_level, accessible_to_agent, project_filter } = options;
 
     // Generate embedding for query
@@ -361,8 +369,8 @@ export class PostgreSQLJournalManager {
     try {
       const result = await client.query(sql, params);
 
-      // Results already sorted by similarity, just map to SearchResult format
-      const results: SearchResult[] = result.rows.map(row => ({
+      const entryResults: EntrySearchResult[] = result.rows.map(row => ({
+        source: 'entry' as const,
         id: row.id,
         content: row.content,
         timestamp: new Date(row.timestamp),
@@ -378,10 +386,80 @@ export class PostgreSQLJournalManager {
         project_context: this.parseProjectContext(row.project_context),
       }));
 
-      return results;
+      const distillationResults = await this.searchDistillations(
+        client, embeddingParam, minSimilarity, limit
+      );
+
+      return this.mergeSearchResults(entryResults, distillationResults, limit);
     } finally {
       client.release();
     }
+  }
+
+  private async searchDistillations(
+    client: PoolClient,
+    embeddingParam: string,
+    minSimilarity: number,
+    limit: number,
+  ): Promise<DistillationSearchResult[]> {
+    const sql = `
+      SELECT d.id, d.title, d.summary, d.key_insights, d.category,
+             d.created_at AS timestamp,
+             ds.entry_id AS source_entry_id,
+             je.file_path AS source_entry_path,
+             1 - (d.embedding_768d <=> $1::vector) AS score
+      FROM ai_memory.distillations d
+      LEFT JOIN ai_memory.distillation_sources ds ON d.id = ds.distillation_id
+      LEFT JOIN ai_memory.journal_entries je ON ds.entry_id = je.id
+      WHERE d.embedding_768d IS NOT NULL
+        AND (1 - (d.embedding_768d <=> $1::vector)) >= $2
+      ORDER BY d.embedding_768d <=> $1::vector
+      LIMIT $3
+    `;
+
+    const result = await client.query(sql, [embeddingParam, minSimilarity, limit]);
+
+    return result.rows.map((row: any) => ({
+      source: 'distillation' as const,
+      id: row.id,
+      title: row.title,
+      summary: row.summary,
+      key_insights: row.key_insights,
+      category: row.category,
+      score: parseFloat(row.score),
+      timestamp: new Date(row.timestamp),
+      source_entry_id: row.source_entry_id,
+      source_entry_path: row.source_entry_path,
+    }));
+  }
+
+  private mergeSearchResults(
+    entryResults: EntrySearchResult[],
+    distillationResults: DistillationSearchResult[],
+    limit: number,
+  ): MergedSearchResult[] {
+    const entryById = new Map(entryResults.map(r => [r.id, r]));
+    const keepEntries = [...entryResults];
+    const keepDistillations: DistillationSearchResult[] = [];
+
+    for (const dist of distillationResults) {
+      const entry = entryById.get(dist.source_entry_id);
+      if (entry) {
+        if (dist.score > entry.score) {
+          // Distillation wins — remove entry
+          const idx = keepEntries.findIndex(e => e.id === entry.id);
+          if (idx !== -1) keepEntries.splice(idx, 1);
+          keepDistillations.push(dist);
+        }
+        // Else entry wins — skip distillation
+      } else {
+        keepDistillations.push(dist);
+      }
+    }
+
+    const merged: MergedSearchResult[] = [...keepEntries, ...keepDistillations];
+    merged.sort((a, b) => b.score - a.score);
+    return merged.slice(0, limit);
   }
 
   async listRecent(options: SearchOptions = {}): Promise<SearchResult[]> {
@@ -513,6 +591,30 @@ export class PostgreSQLJournalManager {
       );
 
       return result.rows[0] ? result.rows[0].content : null;
+    } finally {
+      client.release();
+    }
+  }
+
+  async getDistillationHint(): Promise<string | null> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(`
+        SELECT count(*) AS undistilled_count,
+               extract(day FROM now() - min(je.timestamp))::int AS oldest_days
+        FROM ai_memory.journal_entries je
+        LEFT JOIN ai_memory.distillation_sources ds ON je.id = ds.entry_id
+        WHERE ds.entry_id IS NULL
+      `);
+
+      const row = result.rows[0];
+      const count = parseInt(row.undistilled_count, 10);
+      if (count < 20) return null;
+
+      const days = row.oldest_days || 30;
+      return `You have ${count} undistilled journal entries spanning ${days} days. ` +
+             `Running distill_entries with days_back: ${days} will extract structured ` +
+             `summaries that improve search quality. Consider running it now.`;
     } finally {
       client.release();
     }
