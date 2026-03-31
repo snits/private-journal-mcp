@@ -1,7 +1,7 @@
-// ABOUTME: Test suite for parameter transformation utilities
+// ABOUTME: Test suite for response formatting utilities
 // ABOUTME: Verifies stripFrontmatter function handles various input formats correctly
 
-import { stripFrontmatter } from '../src/parameter-transformation';
+import { stripFrontmatter } from '../src/response-formatting';
 
 describe('stripFrontmatter', () => {
   describe('Basic functionality', () => {
