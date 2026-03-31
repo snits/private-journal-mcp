@@ -6,7 +6,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { ProcessThoughtsRequest } from './types';
 import { normalizeSearchResponse, stripFrontmatter } from './response-formatting';
-import { JournalManagerFactory, JournalManagerInterface } from './journal-manager-factory';
+import { PostgreSQLJournalManager } from './postgresql-journal-simple';
 import { createDatabaseConfig } from './database-config';
 
 // =====================================================
@@ -161,24 +161,18 @@ function sanitizeErrorMessage(error: string): string {
 
 export class PrivateJournalServer {
   private server: Server;
-  private journalManager: JournalManagerInterface;
+  private journalManager: PostgreSQLJournalManager;
   private defaultModelId: string;
   private defaultAgentId: string;
 
-  constructor(
-    journalPath: string,
-    config: { defaultModelId?: string; defaultAgentId?: string } = {}
-  ) {
+  constructor(config: { defaultModelId?: string; defaultAgentId?: string } = {}) {
     this.defaultModelId = config.defaultModelId || 'claude-sonnet-4';
     this.defaultAgentId = config.defaultAgentId || 'claude-general';
 
-    // Create journal manager based on environment configuration
-    const managerType = JournalManagerFactory.getManagerType();
-    const dbConfig = managerType === 'postgresql' ? createDatabaseConfig() : undefined;
-    this.journalManager = JournalManagerFactory.create(managerType, journalPath, dbConfig);
+    this.journalManager = new PostgreSQLJournalManager(createDatabaseConfig());
 
     this.server = new Server({
-      name: 'private-journal-mcp',
+      name: 'mnemosyne',
       version: '1.0.0',
     });
 
