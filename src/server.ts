@@ -8,6 +8,9 @@ import { ProcessThoughtsRequest } from './types';
 import { normalizeSearchResponse, stripFrontmatter } from './response-formatting';
 import { PostgreSQLJournalManager } from './postgresql-journal-simple';
 import { createDatabaseConfig } from './database-config';
+import { DistillationService } from './distillation/distillation-service';
+import { TextGenerationClient } from './text-generation-client';
+import { OpenAIEmbeddingService } from './openai-embedding-service';
 
 // =====================================================
 // SECURITY: Journal Path Validation
@@ -162,6 +165,7 @@ function sanitizeErrorMessage(error: string): string {
 export class PrivateJournalServer {
   private server: Server;
   private journalManager: PostgreSQLJournalManager;
+  private distillationService!: DistillationService;
   private defaultModelId: string;
   private defaultAgentId: string;
 
@@ -343,6 +347,30 @@ export class PrivateJournalServer {
             required: [],
           },
         },
+        {
+          name: 'distill_entries',
+          description:
+            'Extract structured insights from recent journal entries, making them searchable as condensed summaries alongside raw entries. Distilled insights surface patterns and key learnings that may not match raw entry text. Run this when search_journal suggests it, or after writing many journal entries to improve future search quality. Processing may take several seconds per entry.',
+          inputSchema: {
+            type: 'object',
+            properties: {
+              days_back: {
+                type: 'number',
+                description: 'Number of days back to look for undistilled entries (default: 30)',
+              },
+              category: {
+                type: 'string',
+                enum: ['technical', 'reflection', 'planning', 'learning', 'insight', 'collaboration', 'general'],
+                description: 'Optional: only distill entries in this category',
+              },
+              limit: {
+                type: 'number',
+                description: 'Maximum number of entries to distill in one call (default: 50)',
+              },
+            },
+            required: [],
+          },
+        },
       ],
     }));
 
@@ -416,36 +444,44 @@ export class PrivateJournalServer {
         try {
           const rawResults = await this.journalManager.searchBySimilarity(args.query, options);
           const results = normalizeSearchResponse(rawResults);
+
+          const resultText = results.length > 0
+            ? `Found ${results.length} relevant entries:\n\n${results
+                .map((result, i) => {
+                  if (result.source === 'distillation') {
+                    return (
+                      `${i + 1}. [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} [distillation]\n` +
+                      `   Title: ${result.title}\n` +
+                      `   Summary: ${result.summary}\n` +
+                      `   Key Insights:\n${result.key_insights.map((k: string) => `     - ${k}`).join('\n')}\n` +
+                      `   Category: ${result.category}\n` +
+                      `   Source entry: ${result.path}\n`
+                    );
+                  }
+                  const projectLabel = result.project ? `[${result.project}]` : '[no project]';
+                  return (
+                    `${i + 1}. ${projectLabel} [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} (${result.type})\n` +
+                    `   Sections: ${result.sections.join(', ')}\n` +
+                    `   Path: ${result.path}\n` +
+                    `   Excerpt: ${result.excerpt}...\n`
+                  );
+                })
+                .join('\n')}`
+            : 'No relevant entries found.';
+
+          // Append cold-start hint if many entries are undistilled
+          let hint = '';
+          try {
+            const distillationHint = await this.journalManager.getDistillationHint();
+            if (distillationHint) {
+              hint = `\n\n${distillationHint}`;
+            }
+          } catch {
+            // Non-critical
+          }
+
           return {
-            content: [
-              {
-                type: 'text',
-                text:
-                  results.length > 0
-                    ? `Found ${results.length} relevant entries:\n\n${results
-                        .map((result, i) => {
-                          if (result.source === 'distillation') {
-                            return (
-                              `${i + 1}. [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} [distillation]\n` +
-                              `   Title: ${result.title}\n` +
-                              `   Summary: ${result.summary}\n` +
-                              `   Key Insights:\n${result.key_insights.map((k: string) => `     - ${k}`).join('\n')}\n` +
-                              `   Category: ${result.category}\n` +
-                              `   Source entry: ${result.path}\n`
-                            );
-                          }
-                          const projectLabel = result.project ? `[${result.project}]` : '[no project]';
-                          return (
-                            `${i + 1}. ${projectLabel} [Score: ${result.score.toFixed(3)}] ${result.timestamp.toLocaleDateString()} (${result.type})\n` +
-                            `   Sections: ${result.sections.join(', ')}\n` +
-                            `   Path: ${result.path}\n` +
-                            `   Excerpt: ${result.excerpt}...\n`
-                          );
-                        })
-                        .join('\n')}`
-                    : 'No relevant entries found.',
-              },
-            ],
+            content: [{ type: 'text', text: resultText + hint }],
           };
         } catch (error) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -534,6 +570,52 @@ export class PrivateJournalServer {
         }
       }
 
+      if (request.params.name === 'distill_entries') {
+        const daysBack = typeof args?.days_back === 'number' ? args.days_back : 30;
+        const category = typeof args?.category === 'string' ? args.category : undefined;
+        const limit = typeof args?.limit === 'number' ? args.limit : 50;
+
+        try {
+          const result = await this.distillationService.distillEntries({
+            daysBack,
+            category,
+            limit,
+          });
+
+          const lines = [
+            'Distillation complete.',
+            `  Entries found: ${result.entriesFound}`,
+            `  Already distilled: ${result.entriesSkipped}`,
+            `  Newly distilled: ${result.distillationsCreated}`,
+            `  Errors: ${result.errors}`,
+          ];
+
+          if (result.titles.length > 0) {
+            lines.push('', 'Distilled insights:');
+            for (const title of result.titles) {
+              lines.push(`  - "${title}"`);
+            }
+          }
+
+          // Check for undistilled entries outside the processed range
+          try {
+            const hint = await this.journalManager.getDistillationHint();
+            if (hint) {
+              lines.push('', hint);
+            }
+          } catch {
+            // Non-critical
+          }
+
+          return {
+            content: [{ type: 'text', text: lines.join('\n') }],
+          };
+        } catch (error) {
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+          throw new Error(`Failed to distill entries: ${errorMessage}`);
+        }
+      }
+
       throw new Error(`Unknown tool: ${request.params.name}`);
     });
   }
@@ -546,6 +628,14 @@ export class PrivateJournalServer {
       console.error('Failed to initialize database:', error);
       throw error;
     }
+
+    // Create distillation service after DB is initialized (needs the pool)
+    const textGen = new TextGenerationClient();
+    this.distillationService = new DistillationService(
+      (this.journalManager as any).pool,
+      textGen,
+      OpenAIEmbeddingService.getInstance(),
+    );
 
     const transport = new StdioServerTransport();
     await this.server.connect(transport);

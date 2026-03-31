@@ -593,6 +593,30 @@ export class PostgreSQLJournalManager {
     }
   }
 
+  async getDistillationHint(): Promise<string | null> {
+    const client = await this.pool.connect();
+    try {
+      const result = await client.query(`
+        SELECT count(*) AS undistilled_count,
+               extract(day FROM now() - min(je.timestamp))::int AS oldest_days
+        FROM ai_memory.journal_entries je
+        LEFT JOIN ai_memory.distillation_sources ds ON je.id = ds.entry_id
+        WHERE ds.entry_id IS NULL
+      `);
+
+      const row = result.rows[0];
+      const count = parseInt(row.undistilled_count, 10);
+      if (count < 20) return null;
+
+      const days = row.oldest_days || 30;
+      return `You have ${count} undistilled journal entries spanning ${days} days. ` +
+             `Running distill_entries with days_back: ${days} will extract structured ` +
+             `summaries that improve search quality. Consider running it now.`;
+    } finally {
+      client.release();
+    }
+  }
+
   // Utility methods for compatibility with existing code
   private parseJsonSafely(jsonString: string | null, defaultValue: any = null): any {
     if (!jsonString) return defaultValue;
