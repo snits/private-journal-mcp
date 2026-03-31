@@ -15,6 +15,7 @@ import {
   MergedSearchResult,
 } from './private-journal-types';
 import { ProjectContextDetector } from './project-context.js';
+import { extractCategory } from './distillation/category-extraction';
 
 export class PostgreSQLJournalManager {
   private pool!: Pool;
@@ -105,8 +106,8 @@ export class PostgreSQLJournalManager {
         INSERT INTO ai_memory.journal_entries (
           content, timestamp, date_string, file_path, entry_type,
           embedding_768d, sections, visibility_level, user_id,
-          project, project_context
-        ) VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9, $10, $11)
+          project, project_context, category
+        ) VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9, $10, $11, $12)
       `,
         [
           formattedEntry,                                              // $1
@@ -122,6 +123,7 @@ export class PostgreSQLJournalManager {
           this.userId,                                                   // $9
           projectContext?.project ?? null,                             // $10
           this.serializeProjectContext(projectContext),                // $11
+          extractCategory(embeddingData.sections, 'general'),         // $12
         ]
       );
     } finally {
@@ -214,8 +216,8 @@ export class PostgreSQLJournalManager {
           content, timestamp, date_string, file_path, entry_type,
           agent_id, model_id, visibility_level,
           embedding_768d, sections, user_id,
-          project, project_context
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::vector, $10, $11, $12, $13)
+          project, project_context, category
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::vector, $10, $11, $12, $13, $14)
       `,
         [
           formattedEntry,                                              // $1
@@ -233,6 +235,7 @@ export class PostgreSQLJournalManager {
           this.userId,                                                   // $11
           projectContext?.project ?? null,                             // $12
           this.serializeProjectContext(projectContext),                // $13
+          extractCategory(embeddingData.sections, type === 'project' ? 'technical' : null), // $14
         ]
       );
     } finally {
