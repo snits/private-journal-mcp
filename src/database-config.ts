@@ -1,5 +1,5 @@
 // ABOUTME: Database configuration for PostgreSQL connection
-// ABOUTME: Simplified config management for private-journal-mcp
+// ABOUTME: Reads connection parameters from environment variables
 
 export interface DatabaseConfig {
   host: string;

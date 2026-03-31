@@ -1,5 +1,5 @@
-// ABOUTME: Simplified PostgreSQL journal manager maintaining API compatibility with SQLite version
-// ABOUTME: Self-contained implementation for private-journal-mcp without external dependencies
+// ABOUTME: PostgreSQL journal manager with pgvector semantic search
+// ABOUTME: Handles all read/write operations against the ai_memory schema
 
 import { Pool, PoolClient } from 'pg';
 import { DatabaseConfig, createDatabaseConfig } from './database-config';
@@ -17,10 +17,12 @@ export class PostgreSQLJournalManager {
   private pool!: Pool;
   private embeddingService: EmbeddingService;
   private config: DatabaseConfig;
+  private userId: string;
 
   constructor(config?: Partial<DatabaseConfig>) {
     this.config = { ...createDatabaseConfig(), ...config };
     this.embeddingService = EmbeddingService.getInstance();
+    this.userId = process.env.USER_ID || 'mnemosyne';
   }
 
   async initialize(): Promise<void> {
@@ -34,7 +36,7 @@ export class PostgreSQLJournalManager {
       max: this.config.maxConnections,
       idleTimeoutMillis: this.config.idleTimeoutMs,
       connectionTimeoutMillis: this.config.connectionTimeoutMs,
-      application_name: 'private-journal-postgresql',
+      application_name: 'mnemosyne',
     });
 
     // Test connection
@@ -114,7 +116,7 @@ export class PostgreSQLJournalManager {
             : null,                                                    // $6
           JSON.stringify(embeddingData.sections || []),                // $7
           'private',                                                   // $8
-          'private-journal-mcp',                                       // $9
+          this.userId,                                                   // $9
           projectContext?.project ?? null,                             // $10
           this.serializeProjectContext(projectContext),                // $11
         ]
@@ -225,7 +227,7 @@ export class PostgreSQLJournalManager {
             ? this.formatEmbeddingForPgvector(embeddingData.embedding)
             : null,                                                    // $9
           JSON.stringify(embeddingData.sections || []),                // $10
-          'private-journal-mcp',                                       // $11
+          this.userId,                                                   // $11
           projectContext?.project ?? null,                             // $12
           this.serializeProjectContext(projectContext),                // $13
         ]

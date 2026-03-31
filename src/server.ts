@@ -1,4 +1,4 @@
-// ABOUTME: MCP server implementation with process_feelings tool and enhanced semantic search
+// ABOUTME: MCP server providing journaling and semantic search tools
 // ABOUTME: Handles stdio protocol communication and tool registration
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';

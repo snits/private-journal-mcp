@@ -1,10 +1,10 @@
 {
-  "name": "private-journal-mcp",
-  "version": "1.0.0",
-  "description": "A lightweight MCP server that provides Claude with a private journaling capability to process feelings and thoughts",
+  "name": "mnemosyne",
+  "version": "2.0.0",
+  "description": "AI memory system: PostgreSQL-backed journaling MCP server with pgvector semantic search",
   "main": "dist/index.js",
   "bin": {
-    "private-journal-mcp": "./dist/index.js"
+    "mnemosyne": "./dist/index.js"
   },
   "scripts": {
     "prepare": "npm run build",
@@ -19,11 +19,16 @@
   "keywords": [
     "mcp",
     "journal",
-    "private",
-    "claude",
-    "ai"
+    "ai",
+    "memory",
+    "postgresql",
+    "pgvector",
+    "semantic-search"
   ],
-  "author": "Jesse Vincent <jesse@fsck.com>",
+  "author": "Jerry Snitselaar",
+  "contributors": [
+    "Jesse Vincent <jesse@fsck.com>"
+  ],
   "license": "MIT",
   "devDependencies": {
     "@types/node": "^20.0.0",
@@ -40,9 +45,7 @@
     "@types/pg": "^8.11.0",
     "dotenv": "^17.2.3",
     "p-queue": "^9.0.0",
-    "pg": "^8.11.3",
-    "pino": "^8.16.2",
-    "zod": "^3.22.4"
+    "pg": "^8.11.3"
   },
   "files": [
     "dist/**/*",
