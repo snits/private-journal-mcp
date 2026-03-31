@@ -10,6 +10,9 @@ import {
   DatabaseEntry,
   SearchResult,
   ProjectContext,
+  EntrySearchResult,
+  DistillationSearchResult,
+  MergedSearchResult,
 } from './private-journal-types';
 import { ProjectContextDetector } from './project-context.js';
 
@@ -270,7 +273,7 @@ export class PostgreSQLJournalManager {
     }
   }
 
-  async searchBySimilarity(query: string, options: SearchOptions = {}): Promise<SearchResult[]> {
+  async searchBySimilarity(query: string, options: SearchOptions = {}): Promise<MergedSearchResult[]> {
     const { limit = 10, agent_id, model_id, visibility_level, accessible_to_agent, project_filter } = options;
 
     // Generate embedding for query
@@ -363,8 +366,8 @@ export class PostgreSQLJournalManager {
     try {
       const result = await client.query(sql, params);
 
-      // Results already sorted by similarity, just map to SearchResult format
-      const results: SearchResult[] = result.rows.map(row => ({
+      const entryResults: EntrySearchResult[] = result.rows.map(row => ({
+        source: 'entry' as const,
         id: row.id,
         content: row.content,
         timestamp: new Date(row.timestamp),
@@ -380,10 +383,80 @@ export class PostgreSQLJournalManager {
         project_context: this.parseProjectContext(row.project_context),
       }));
 
-      return results;
+      const distillationResults = await this.searchDistillations(
+        client, embeddingParam, minSimilarity, limit
+      );
+
+      return this.mergeSearchResults(entryResults, distillationResults, limit);
     } finally {
       client.release();
     }
+  }
+
+  private async searchDistillations(
+    client: PoolClient,
+    embeddingParam: string,
+    minSimilarity: number,
+    limit: number,
+  ): Promise<DistillationSearchResult[]> {
+    const sql = `
+      SELECT d.id, d.title, d.summary, d.key_insights, d.category,
+             d.created_at AS timestamp,
+             ds.entry_id AS source_entry_id,
+             je.file_path AS source_entry_path,
+             1 - (d.embedding_768d <=> $1::vector) AS score
+      FROM ai_memory.distillations d
+      LEFT JOIN ai_memory.distillation_sources ds ON d.id = ds.distillation_id
+      LEFT JOIN ai_memory.journal_entries je ON ds.entry_id = je.id
+      WHERE d.embedding_768d IS NOT NULL
+        AND (1 - (d.embedding_768d <=> $1::vector)) >= $2
+      ORDER BY d.embedding_768d <=> $1::vector
+      LIMIT $3
+    `;
+
+    const result = await client.query(sql, [embeddingParam, minSimilarity, limit]);
+
+    return result.rows.map((row: any) => ({
+      source: 'distillation' as const,
+      id: row.id,
+      title: row.title,
+      summary: row.summary,
+      key_insights: row.key_insights,
+      category: row.category,
+      score: parseFloat(row.score),
+      timestamp: new Date(row.timestamp),
+      source_entry_id: row.source_entry_id,
+      source_entry_path: row.source_entry_path,
+    }));
+  }
+
+  private mergeSearchResults(
+    entryResults: EntrySearchResult[],
+    distillationResults: DistillationSearchResult[],
+    limit: number,
+  ): MergedSearchResult[] {
+    const entryById = new Map(entryResults.map(r => [r.id, r]));
+    const keepEntries = [...entryResults];
+    const keepDistillations: DistillationSearchResult[] = [];
+
+    for (const dist of distillationResults) {
+      const entry = entryById.get(dist.source_entry_id);
+      if (entry) {
+        if (dist.score > entry.score) {
+          // Distillation wins — remove entry
+          const idx = keepEntries.findIndex(e => e.id === entry.id);
+          if (idx !== -1) keepEntries.splice(idx, 1);
+          keepDistillations.push(dist);
+        }
+        // Else entry wins — skip distillation
+      } else {
+        keepDistillations.push(dist);
+      }
+    }
+
+    const merged: MergedSearchResult[] = [...keepEntries, ...keepDistillations];
+    merged.sort((a, b) => b.score - a.score);
+    return merged.slice(0, limit);
   }
 
   async listRecent(options: SearchOptions = {}): Promise<SearchResult[]> {
