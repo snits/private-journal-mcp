@@ -25,9 +25,9 @@ describe('TextGenerationClient', () => {
 
     test('uses environment variable defaults', () => {
       const originalEnv = { ...process.env };
-      process.env.TEXT_GEN_BASE_URL = 'http://env-test:5678/v1';
-      process.env.TEXT_GEN_MODEL = 'env-model';
-      process.env.TEXT_GEN_API_KEY = 'env-key';
+      process.env.OPENAI_CHAT_BASE_URL = 'http://env-test:5678/v1';
+      process.env.OPENAI_CHAT_MODEL = 'env-model';
+      process.env.OPENAI_API_KEY = 'env-key';
       const client = new TextGenerationClient();
       expect(client).toBeDefined();
       process.env = originalEnv;
@@ -60,7 +60,7 @@ describe('TextGenerationClient', () => {
       expect(body.model).toBe('test-model');
       expect(body.messages).toEqual([{ role: 'user', content: 'test prompt' }]);
       expect(body.temperature).toBe(0.3);
-      expect(body.max_tokens).toBe(1024);
+      expect(body.max_tokens).toBe(2048);
     });
 
     test('returns generated text content', async () => {
@@ -118,6 +118,47 @@ describe('TextGenerationClient', () => {
         model: 'test-model',
       });
       await expect(client.generate('prompt')).rejects.toThrow('No response content');
+    });
+
+    test('includes response_format when provided', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: '{"result": true}' } }],
+        }),
+      });
+      const client = new TextGenerationClient({
+        baseUrl: 'http://test:1234/v1',
+        model: 'test-model',
+      });
+      await client.generate('prompt', { responseFormat: { type: 'json_object' } });
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.response_format).toEqual({ type: 'json_object' });
+    });
+
+    test('excludes response_format when not provided', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'result' } }],
+        }),
+      });
+      const client = new TextGenerationClient({
+        baseUrl: 'http://test:1234/v1',
+        model: 'test-model',
+      });
+      await client.generate('prompt');
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.response_format).toBeUndefined();
+    });
+  });
+
+  describe('getModel', () => {
+    test('returns the configured model name', () => {
+      const client = new TextGenerationClient({
+        model: 'my-custom-model',
+      });
+      expect(client.getModel()).toBe('my-custom-model');
     });
   });
 

@@ -15,15 +15,20 @@ export class TextGenerationClient {
   private timeout: number;
 
   constructor(config: TextGenerationConfig = {}) {
-    this.baseUrl = config.baseUrl || process.env.TEXT_GEN_BASE_URL || 'http://localhost:11434/v1';
-    this.model = config.model || process.env.TEXT_GEN_MODEL || 'llama3.1:8b';
-    this.apiKey = config.apiKey || process.env.TEXT_GEN_API_KEY || '';
-    this.timeout = config.timeout || 60000;
+    this.baseUrl = config.baseUrl || process.env.OPENAI_CHAT_BASE_URL || 'http://localhost:11434/v1';
+    this.model = config.model || process.env.OPENAI_CHAT_MODEL || 'qwen3.5:32k';
+    this.apiKey = config.apiKey || process.env.OPENAI_API_KEY || '';
+    this.timeout = config.timeout || 120000;
+  }
+
+  getModel(): string {
+    return this.model;
   }
 
   async generate(prompt: string, options?: {
     temperature?: number;
     maxTokens?: number;
+    responseFormat?: { type: string };
   }): Promise<string> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
@@ -39,7 +44,8 @@ export class TextGenerationClient {
           model: this.model,
           messages: [{ role: 'user', content: prompt }],
           temperature: options?.temperature ?? 0.3,
-          max_tokens: options?.maxTokens ?? 1024,
+          max_tokens: options?.maxTokens ?? 2048,
+          ...(options?.responseFormat && { response_format: options.responseFormat }),
         }),
         signal: controller.signal,
       });
