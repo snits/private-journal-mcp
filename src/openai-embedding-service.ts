@@ -82,9 +82,8 @@ export class OpenAIEmbeddingService {
 
     try {
       // Truncate text to respect model token limit
-      // Most models: ~2048 tokens (~6000 chars for safety)
-      const MAX_CHARS = 6000;
-      const truncatedText = text.length > MAX_CHARS ? text.substring(0, MAX_CHARS) : text;
+      const maxChars = this.modelConfig.maxInputChars;
+      const truncatedText = text.length > maxChars ? text.substring(0, maxChars) : text;
 
       const embeddings = await this.client.generateEmbedding([truncatedText], this.modelName);
 
@@ -100,15 +99,15 @@ export class OpenAIEmbeddingService {
   }
 
   async generateDocumentEmbedding(text: string): Promise<number[]> {
-    return this.generateEmbedding(`search_document: ${text}`);
+    return this.generateEmbedding(this.modelConfig.documentPrefix + text);
   }
 
   async generateQueryEmbedding(text: string): Promise<number[]> {
-    return this.generateEmbedding(`search_query: ${text}`);
+    return this.generateEmbedding(this.modelConfig.queryPrefix + text);
   }
 
   async generateDocumentBatch(texts: string[]): Promise<number[][]> {
-    return this.generateBatch(texts.map(t => `search_document: ${t}`));
+    return this.generateBatch(texts.map(t => this.modelConfig.documentPrefix + t));
   }
 
   async generateBatch(texts: string[]): Promise<number[][]> {
@@ -118,18 +117,19 @@ export class OpenAIEmbeddingService {
 
     try {
       // Truncate individual texts to respect model token limit
-      const MAX_TEXT_CHARS = 6000;
+      const maxTextChars = this.modelConfig.maxInputChars;
       const truncatedTexts = texts.map((text) =>
-        text.length > MAX_TEXT_CHARS ? text.substring(0, MAX_TEXT_CHARS) : text
+        text.length > maxTextChars ? text.substring(0, maxTextChars) : text
       );
 
-      // Batch splitting with safety margin (80% of token limit)
-      // Most models: 2048 * 0.8 = 1638 tokens ≈ 4900 chars per batch
-      const MAX_BATCH_CHARS = 4900;
+      // Batch splitting with safety margin (80% of token limit).
+      // For models with large maxInputChars (e.g. qwen3 at 16000), this produces
+      // single-document sub-batches, which is acceptable at this codebase's scale.
+      const maxBatchChars = Math.floor(this.modelConfig.maxInputChars * 0.8);
 
       // If batch is small enough, send it all at once
       const totalChars = truncatedTexts.reduce((sum, text) => sum + text.length, 0);
-      if (totalChars <= MAX_BATCH_CHARS) {
+      if (totalChars <= maxBatchChars) {
         return await this.client.generateEmbedding(truncatedTexts, this.modelName);
       }
 
@@ -142,7 +142,7 @@ export class OpenAIEmbeddingService {
         const textLength = text.length;
 
         // If adding this text would exceed limit, start a new batch
-        if (currentBatchChars + textLength > MAX_BATCH_CHARS && currentBatch.length > 0) {
+        if (currentBatchChars + textLength > maxBatchChars && currentBatch.length > 0) {
           subBatches.push(currentBatch);
           currentBatch = [];
           currentBatchChars = 0;
