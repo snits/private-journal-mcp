@@ -33,7 +33,6 @@ async function migrateEmbeddings(batchSize: number = 100) {
       SELECT COUNT(*) as total
       FROM ai_memory.journal_entries
       WHERE embedding IS NOT NULL
-        AND embedding IS NULL
         AND octet_length(embedding) > 0
     `);
     const totalToMigrate = parseInt(countResult.rows[0].total);
@@ -59,7 +58,6 @@ async function migrateEmbeddings(batchSize: number = 100) {
         SELECT id, embedding, file_path
         FROM ai_memory.journal_entries
         WHERE embedding IS NOT NULL
-          AND embedding IS NULL
           AND octet_length(embedding) > 0
         ORDER BY id
         LIMIT $1
@@ -140,29 +138,14 @@ async function migrateEmbeddings(batchSize: number = 100) {
     console.log('=== Verification ===');
     const verifyResult = await pool.query(`
       SELECT
-        COUNT(*) FILTER (WHERE embedding IS NOT NULL AND embedding IS NULL AND octet_length(embedding) > 0) as legacy_only,
-        COUNT(*) FILTER (WHERE embedding IS NOT NULL AND octet_length(embedding) = 0) as empty_embedding,
-        COUNT(*) FILTER (WHERE embedding IS NOT NULL) as new_format,
+        COUNT(*) FILTER (WHERE embedding IS NOT NULL) as has_embedding,
         COUNT(*) as total
       FROM ai_memory.journal_entries
     `);
 
     const stats = verifyResult.rows[0];
-    console.log(`Legacy format only: ${stats.legacy_only}`);
-    console.log(`Empty embeddings (skipped): ${stats.empty_embedding}`);
-    console.log(`New pgvector format: ${stats.new_format}`);
+    console.log(`With embedding: ${stats.has_embedding}`);
     console.log(`Total entries: ${stats.total}`);
-
-    if (parseInt(stats.legacy_only) === 0) {
-      console.log('');
-      console.log('✓ Migration complete! All valid entries now use pgvector format.');
-      if (parseInt(stats.empty_embedding) > 0) {
-        console.log(`Note: ${stats.empty_embedding} entries have empty embeddings and were skipped.`);
-      }
-    } else {
-      console.log('');
-      console.log(`⚠ Warning: ${stats.legacy_only} entries still in legacy format.`);
-    }
   } catch (error) {
     console.error('Fatal error:', error);
     throw error;
