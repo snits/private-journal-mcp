@@ -1,14 +1,14 @@
 -- ABOUTME: Creates performance indexes for journal_entries table
 -- ABOUTME: Includes HNSW vector index for fast semantic search and project filtering index
 
--- Create HNSW index on embedding_768d for fast vector similarity search
+-- Create HNSW index on embedding for fast vector similarity search
 -- This index dramatically improves semantic search performance (from ~400ms to ~6ms)
 -- Parameters:
 --   m=16: Number of bi-directional links per node (balances recall and build time)
 --   ef_construction=64: Size of dynamic candidate list during index construction
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_journal_entries_embedding_768d_hnsw
+CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_journal_entries_embedding_hnsw
 ON ai_memory.journal_entries
-USING hnsw (embedding_768d vector_cosine_ops)
+USING hnsw (embedding vector_cosine_ops)
 WITH (m='16', ef_construction='64');
 
 -- Create partial B-tree index on project column for fast project filtering
@@ -40,7 +40,7 @@ BEGIN
         FROM pg_indexes
         WHERE schemaname = 'ai_memory'
           AND tablename = 'journal_entries'
-          AND indexname = 'idx_journal_entries_embedding_768d_hnsw'
+          AND indexname = 'idx_journal_entries_embedding_hnsw'
     ) INTO hnsw_exists;
 
     SELECT EXISTS (

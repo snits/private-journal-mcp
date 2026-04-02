@@ -57,7 +57,7 @@ async function regenerateEmbeddings(
     const query = `
       SELECT id, content, file_path
       FROM ai_memory.journal_entries
-      ${missingOnly ? 'WHERE embedding_768d IS NULL' : ''}
+      ${missingOnly ? 'WHERE embedding IS NULL' : ''}
       ORDER BY timestamp DESC
       ${limit ? `LIMIT ${limit}` : ''}
     `;
@@ -111,7 +111,7 @@ async function regenerateEmbeddings(
           const embeddingVector = `[${embedding.join(',')}]`;
 
           await pool.query(
-            'UPDATE ai_memory.journal_entries SET embedding_768d = $1::vector WHERE id = $2',
+            'UPDATE ai_memory.journal_entries SET embedding = $1::vector WHERE id = $2',
             [embeddingVector, entry.id]
           );
 
@@ -163,7 +163,7 @@ async function regenerateEmbeddings(
               const embeddingVector = `[${embedding.join(',')}]`;
 
               await client.query(
-                'UPDATE ai_memory.journal_entries SET embedding_768d = $1::vector WHERE id = $2',
+                'UPDATE ai_memory.journal_entries SET embedding = $1::vector WHERE id = $2',
                 [embeddingVector, entry.id]
               );
 

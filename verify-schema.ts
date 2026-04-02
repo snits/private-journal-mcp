@@ -41,7 +41,7 @@ async function verifySchema() {
     const requiredColumns = [
       { name: 'project', type: 'character varying' },
       { name: 'project_context', type: 'jsonb' },
-      { name: 'embedding_768d', type: 'USER-DEFINED' }, // pgvector types show as USER-DEFINED
+      { name: 'embedding', type: 'USER-DEFINED' }, // pgvector types show as USER-DEFINED
     ];
 
     const columnsResult = await pool.query<ColumnInfo>(`
@@ -86,7 +86,7 @@ async function verifySchema() {
 
     const indexes = indexesResult.rows;
     const requiredIndexes = [
-      'idx_journal_entries_embedding_768d_hnsw',
+      'idx_journal_entries_embedding_hnsw',
       'idx_journal_entries_project',
     ];
 
@@ -111,19 +111,18 @@ async function verifySchema() {
     console.log('--- Data Migration Status ---');
 
     // Check which columns exist
-    const hasEmbedding768d = columns.find((c) => c.column_name === 'embedding_768d');
+    const hasEmbedding = columns.find((c) => c.column_name === 'embedding');
     const hasProject = columns.find((c) => c.column_name === 'project');
     const hasProjectContext = columns.find((c) => c.column_name === 'project_context');
 
-    if (!hasEmbedding768d && !hasProject && !hasProjectContext) {
+    if (!hasEmbedding && !hasProject && !hasProjectContext) {
       console.log('Migration columns not yet added. Run 001-add-project-columns.sql first.');
       console.log('');
     } else {
       // Build dynamic query based on which columns exist
       const filters = [];
-      if (hasEmbedding768d) {
-        filters.push('COUNT(*) FILTER (WHERE embedding_768d IS NOT NULL) as has_vector_embedding');
-        filters.push('COUNT(*) FILTER (WHERE embedding IS NOT NULL AND embedding_768d IS NULL) as needs_embedding_migration');
+      if (hasEmbedding) {
+        filters.push('COUNT(*) FILTER (WHERE embedding IS NOT NULL) as has_embedding');
       }
       if (hasProject) {
         filters.push('COUNT(*) FILTER (WHERE project IS NOT NULL) as has_project');
@@ -134,8 +133,7 @@ async function verifySchema() {
 
       const statsQuery = `
         SELECT
-          COUNT(*) as total_entries,
-          COUNT(*) FILTER (WHERE embedding IS NOT NULL) as has_legacy_embedding
+          COUNT(*) as total_entries
           ${filters.length > 0 ? ',' : ''}
           ${filters.join(',\n          ')}
         FROM ai_memory.journal_entries
@@ -145,10 +143,9 @@ async function verifySchema() {
       const stats = statsResult.rows[0];
 
       console.log(`Total entries: ${stats.total_entries}`);
-      console.log(`With legacy embedding (bytea): ${stats.has_legacy_embedding}`);
 
-      if (hasEmbedding768d) {
-        console.log(`With vector embedding (vector): ${stats.has_vector_embedding || 0}`);
+      if (hasEmbedding) {
+        console.log(`With embedding (vector): ${stats.has_embedding || 0}`);
       }
       if (hasProject) {
         console.log(`With project name: ${stats.has_project || 0}`);
@@ -157,17 +154,6 @@ async function verifySchema() {
         console.log(`With project context: ${stats.has_project_context || 0}`);
       }
       console.log('');
-
-      if (hasEmbedding768d) {
-        if (parseInt(stats.needs_embedding_migration || '0') > 0) {
-          console.log(
-            `⚠ ${stats.needs_embedding_migration} entries need embedding migration (bytea → vector)`
-          );
-        } else if (parseInt(stats.has_vector_embedding || '0') > 0) {
-          console.log(`✓ All entries with embeddings have been migrated to vector format`);
-        }
-        console.log('');
-      }
     }
 
     // Final summary
@@ -181,7 +167,7 @@ async function verifySchema() {
       if (!allColumnsExist) {
         console.log('1. Run: psql -h localhost -U postgres -d mnemosyne_prod -f 001-add-project-columns.sql');
       }
-      if (!hasEmbedding768d) {
+      if (!hasEmbedding) {
         console.log('2. Run: ./migrate-embeddings-to-vector.ts (after step 1)');
       }
       if (!allIndexesExist) {

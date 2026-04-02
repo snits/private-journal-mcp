@@ -44,7 +44,7 @@ Mnemosyne is an MCP server that provides AI agents with private journaling and s
 **Database:**
 - PostgreSQL with pgvector extension
 - Schema: `ai_memory`
-- Primary table: `journal_entries` with `embedding_768d` vector(768) column
+- Primary table: `journal_entries` with `embedding` vector(768) column
 - HNSW index for cosine similarity search
 - Production database: `mnemosyne_prod`
 - Test database: `mnemosyne_test`

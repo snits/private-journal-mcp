@@ -7,7 +7,7 @@ This guide covers migrating the `ai_memory.journal_entries` table to support pro
 This migration adds:
 - `project` column for filtering entries by project name
 - `project_context` JSONB column for storing git metadata
-- `embedding_768d` vector(768) column for pgvector semantic search
+- `embedding` vector(768) column for pgvector semantic search
 - HNSW index for fast vector similarity search
 - Partial B-tree index on project column
 
@@ -42,7 +42,7 @@ This will tell you:
 
 ### Step 1: Add Missing Columns
 
-Add the `project`, `project_context`, and `embedding_768d` columns:
+Add the `project`, `project_context`, and `embedding` columns:
 
 ```bash
 psql -h localhost -U postgres -d mnemosyne_prod -f 001-add-project-columns.sql
@@ -53,14 +53,14 @@ Expected output:
 NOTICE:  === Column Addition Verification ===
 NOTICE:  project column: ✓ EXISTS
 NOTICE:  project_context column: ✓ EXISTS
-NOTICE:  embedding_768d column: ✓ EXISTS
+NOTICE:  embedding column: ✓ EXISTS
 NOTICE:  All columns added successfully!
 ```
 
 **What this does:**
 - Adds `project VARCHAR(100)` - stores project name
 - Adds `project_context JSONB` - stores full git metadata
-- Adds `embedding_768d vector(768)` - pgvector column for embeddings
+- Adds `embedding vector(768)` - pgvector column for embeddings
 - Verifies all columns were created successfully
 
 ### Step 2: Migrate Embeddings
@@ -111,7 +111,7 @@ psql -h localhost -U postgres -d mnemosyne_prod -f 002-add-indexes.sql
 ```
 
 **What this does:**
-- Creates HNSW index on `embedding_768d` for fast vector similarity search
+- Creates HNSW index on `embedding` for fast vector similarity search
   - Uses `m=16` for balanced recall/build time
   - Uses `ef_construction=64` for index quality
 - Creates partial B-tree index on `project` column (only for non-NULL values)
@@ -131,7 +131,17 @@ NOTICE:  All indexes created successfully!
 - HNSW index reduces semantic search time from ~400-850ms to ~6ms
 - Project index enables fast filtering of entries by project
 
-### Step 4: Verify Migration
+### Step 4: Rename Embedding Column (existing databases only)
+
+If your database was set up before the `embedding_768d` -> `embedding` rename, run:
+
+```bash
+psql -h localhost -U postgres -d mnemosyne_prod -f sql/004-rename-embedding-column.sql
+```
+
+This drops the legacy `embedding bytea` column, renames `embedding_768d` to `embedding`, and renames the HNSW index. Fresh databases using the current schema files already have the correct column name and can skip this step.
+
+### Step 5: Verify Migration
 
 Confirm everything is correct:
 
@@ -148,10 +158,10 @@ Host: localhost:5432
 --- Required Columns ---
 ✓ project              character varying         (nullable: YES)
 ✓ project_context      jsonb                     (nullable: YES)
-✓ embedding_768d       USER-DEFINED              (nullable: YES)
+✓ embedding            USER-DEFINED              (nullable: YES)
 
 --- Required Indexes ---
-✓ idx_journal_entries_embedding_768d_hnsw
+✓ idx_journal_entries_embedding_hnsw
   Type: HNSW vector similarity index
 ✓ idx_journal_entries_project
   Type: Partial B-tree index on project column
@@ -187,18 +197,9 @@ New entries will automatically capture project context. For existing entries, yo
    ```
 3. **Custom migration** - Write a script to parse git context from historical data
 
-### Cleanup (Optional)
+### Cleanup
 
-Once you've verified the migration is successful, you may optionally remove the legacy `embedding` bytea column:
-
-```sql
--- CAUTION: Only do this after verifying everything works!
--- This operation is irreversible
-ALTER TABLE ai_memory.journal_entries
-DROP COLUMN embedding;
-```
-
-**Recommendation:** Keep the legacy column for a few weeks until you're confident the migration is stable.
+The legacy `embedding bytea` column is automatically dropped by `sql/004-rename-embedding-column.sql`. No manual cleanup is needed.
 
 ## Rollback (Emergency Only)
 
@@ -206,7 +207,7 @@ If something goes wrong, you can rollback individual steps:
 
 ### Rollback Indexes
 ```sql
-DROP INDEX CONCURRENTLY IF EXISTS ai_memory.idx_journal_entries_embedding_768d_hnsw;
+DROP INDEX CONCURRENTLY IF EXISTS ai_memory.idx_journal_entries_embedding_hnsw;
 DROP INDEX CONCURRENTLY IF EXISTS ai_memory.idx_journal_entries_project;
 ```
 
@@ -215,7 +216,7 @@ DROP INDEX CONCURRENTLY IF EXISTS ai_memory.idx_journal_entries_project;
 -- WARNING: This will delete all project data and migrated embeddings!
 ALTER TABLE ai_memory.journal_entries DROP COLUMN project;
 ALTER TABLE ai_memory.journal_entries DROP COLUMN project_context;
-ALTER TABLE ai_memory.journal_entries DROP COLUMN embedding_768d;
+ALTER TABLE ai_memory.journal_entries DROP COLUMN embedding;
 ```
 
 ## Troubleshooting
@@ -249,19 +250,18 @@ The `CREATE INDEX CONCURRENTLY` allows table access during creation but takes lo
 - [ ] Run `./verify-schema.ts` to check current status
 - [ ] Backup database: `pg_dump -h localhost -U postgres mnemosyne_prod > backup.sql`
 - [ ] Run `001-add-project-columns.sql` to add columns
-- [ ] Run `./migrate-embeddings-to-vector.ts` to convert embeddings
 - [ ] Run `002-add-indexes.sql` to create indexes
+- [ ] Run `sql/004-rename-embedding-column.sql` (existing databases only)
 - [ ] Run `./verify-schema.ts` to confirm success
-- [ ] Test semantic search with new HNSW index
-- [ ] Test project filtering with new project column
+- [ ] Test semantic search with HNSW index
+- [ ] Test project filtering with project column
 - [ ] (Optional) Backfill project data for existing entries
-- [ ] (Optional after verification) Drop legacy `embedding` column
 
 ## Files Created
 
 - `001-add-project-columns.sql` - Adds required columns
 - `002-add-indexes.sql` - Creates performance indexes
-- `migrate-embeddings-to-vector.ts` - Converts embeddings (already existed)
+- `sql/004-rename-embedding-column.sql` - Renames embedding column (existing databases)
 - `verify-schema.ts` - Verification and status reporting
 - `MIGRATION-GUIDE.md` - This document
 

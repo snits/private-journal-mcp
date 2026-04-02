@@ -67,7 +67,6 @@ export interface DatabaseEntry {
   model_id?: string;
   visibility_level: VisibilityLevel;
   entry_type: 'simple' | 'thoughts';
-  embedding?: Buffer;
   searchable_text?: string;
   sections?: string;
   created_at: Date;

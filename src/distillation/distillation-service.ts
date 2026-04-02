@@ -188,7 +188,7 @@ export class DistillationService {
           if (lookup.rows.length > 0) {
             const formatted = `[${embedding.join(',')}]`;
             await client.query(
-              `UPDATE ai_memory.distillations SET embedding_768d = $1::vector WHERE id = $2`,
+              `UPDATE ai_memory.distillations SET embedding = $1::vector WHERE id = $2`,
               [formatted, lookup.rows[0].distillation_id],
             );
           }

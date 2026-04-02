@@ -128,31 +128,35 @@ describe('PostgreSQLJournalManager write operations', () => {
 describe('PostgreSQLJournalManager search filtering', () => {
   it('should filter search results by specific project name', async () => {
     // Mock database connection
+    // searchBySimilarity runs two queries: one for journal entries, one for distillations.
+    // Return the canned entry row for the journal query, empty for distillations.
+    const entryRow = {
+      id: 1,
+      content: 'Test entry',
+      timestamp: new Date(),
+      file_path: '/test/path',
+      score: 0.95,
+      entry_type: 'thoughts',
+      sections: JSON.stringify(['project_notes']),
+      searchable_text: 'Test entry',
+      agent_id: 'test-agent',
+      model_id: 'test-model',
+      visibility_level: 'private',
+      project: 'test-project',
+      project_context: JSON.stringify({
+        project: 'test-project',
+        working_directory: '/test/dir',
+        context_hash: 'abc123',
+        timestamp: new Date().toISOString(),
+        confidence: 'high',
+      }),
+    };
     const mockClient = {
-      query: vi.fn().mockResolvedValue({
-        rows: [
-          {
-            id: 1,
-            content: 'Test entry',
-            timestamp: new Date(),
-            file_path: '/test/path',
-            score: 0.95,
-            entry_type: 'thoughts',
-            sections: JSON.stringify(['project_notes']),
-            searchable_text: 'Test entry',
-            agent_id: 'test-agent',
-            model_id: 'test-model',
-            visibility_level: 'private',
-            project: 'test-project',
-            project_context: JSON.stringify({
-              project: 'test-project',
-              working_directory: '/test/dir',
-              context_hash: 'abc123',
-              timestamp: new Date().toISOString(),
-              confidence: 'high',
-            }),
-          },
-        ],
+      query: vi.fn().mockImplementation((sql: string) => {
+        if (sql.includes('FROM ai_memory.distillations')) {
+          return Promise.resolve({ rows: [] });
+        }
+        return Promise.resolve({ rows: [entryRow] });
       }),
       release: vi.fn(),
     };
