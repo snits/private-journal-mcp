@@ -25,7 +25,7 @@ export const MODEL_CONFIGS: Record<string, EmbeddingModelConfig> = {
     documentPrefix: '',
     queryPrefix:
       'Instruct: Given a personal journal search query, retrieve relevant journal entries\nQuery: ',
-    defaultMinRelevance: 0.55,
+    defaultMinRelevance: 0.40,
     maxInputChars: 16000,
   },
 };

@@ -36,7 +36,7 @@ describe('getModelConfig', () => {
     expect(config.documentPrefix).toBe('');
     expect(config.queryPrefix).toContain('Instruct:');
     expect(config.queryPrefix).toContain('Query: ');
-    expect(config.defaultMinRelevance).toBe(0.55);
+    expect(config.defaultMinRelevance).toBe(0.40);
     expect(config.maxInputChars).toBe(16000);
   });
 
