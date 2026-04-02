@@ -1,10 +1,10 @@
-// ABOUTME: Tests for OpenAI embedding service task prefix behavior
-// ABOUTME: Verifies search_document and search_query prefixes are applied correctly
+// ABOUTME: Tests for OpenAI embedding service prefix and truncation behavior
+// ABOUTME: Verifies prefixes and limits are driven by EmbeddingModelConfig
 
 import { vi, describe, test, expect, beforeEach, afterEach } from 'vitest';
 import type { OpenAIEmbeddingService } from '../src/openai-embedding-service';
 
-describe('OpenAIEmbeddingService task prefixes', () => {
+describe('OpenAIEmbeddingService task prefixes (nomic defaults)', () => {
   let service: OpenAIEmbeddingService;
   let mockClientGenerateEmbedding: ReturnType<typeof vi.fn>;
 
@@ -25,7 +25,7 @@ describe('OpenAIEmbeddingService task prefixes', () => {
     service = mod.OpenAIEmbeddingService.getInstance();
   });
 
-  test('generateDocumentEmbedding prepends search_document: prefix', async () => {
+  test('generateDocumentEmbedding prepends documentPrefix from config', async () => {
     await service.generateDocumentEmbedding('journal entry about testing');
 
     expect(mockClientGenerateEmbedding).toHaveBeenCalledWith(
@@ -34,7 +34,7 @@ describe('OpenAIEmbeddingService task prefixes', () => {
     );
   });
 
-  test('generateQueryEmbedding prepends search_query: prefix', async () => {
+  test('generateQueryEmbedding prepends queryPrefix from config', async () => {
     await service.generateQueryEmbedding('find entries about architecture');
 
     expect(mockClientGenerateEmbedding).toHaveBeenCalledWith(
@@ -43,7 +43,7 @@ describe('OpenAIEmbeddingService task prefixes', () => {
     );
   });
 
-  test('generateDocumentBatch prepends search_document: prefix to all texts', async () => {
+  test('generateDocumentBatch prepends documentPrefix to all texts', async () => {
     mockClientGenerateEmbedding.mockResolvedValue([
       new Array(768).fill(0.1),
       new Array(768).fill(0.2),
@@ -63,6 +63,202 @@ describe('OpenAIEmbeddingService task prefixes', () => {
       ['plain text without prefix'],
       expect.any(String)
     );
+  });
+});
+
+describe('OpenAIEmbeddingService with qwen3 config', () => {
+  let service: OpenAIEmbeddingService;
+  let mockClientGenerateEmbedding: ReturnType<typeof vi.fn>;
+  const savedModel = process.env.OPENAI_EMBEDDING_MODEL;
+
+  beforeEach(async () => {
+    vi.resetModules();
+
+    process.env.OPENAI_EMBEDDING_MODEL = 'qwen3-embedding:4b';
+
+    mockClientGenerateEmbedding = vi
+      .fn()
+      .mockResolvedValue([new Array(768).fill(0.1)]);
+
+    vi.doMock('../src/openai-client', () => ({
+      OpenAIClient: vi.fn().mockImplementation(() => ({
+        generateEmbedding: mockClientGenerateEmbedding,
+      })),
+    }));
+
+    const mod = await import('../src/openai-embedding-service');
+    service = mod.OpenAIEmbeddingService.getInstance();
+  });
+
+  afterEach(() => {
+    if (savedModel !== undefined) {
+      process.env.OPENAI_EMBEDDING_MODEL = savedModel;
+    } else {
+      delete process.env.OPENAI_EMBEDDING_MODEL;
+    }
+  });
+
+  test('generateDocumentEmbedding uses empty prefix for qwen3', async () => {
+    await service.generateDocumentEmbedding('some document text');
+
+    // qwen3 documentPrefix is '' so the text is passed as-is
+    expect(mockClientGenerateEmbedding).toHaveBeenCalledWith(
+      ['some document text'],
+      expect.any(String)
+    );
+  });
+
+  test('generateQueryEmbedding uses instruct prefix for qwen3', async () => {
+    await service.generateQueryEmbedding('find journal entries');
+
+    const expectedPrefix =
+      'Instruct: Given a personal journal search query, retrieve relevant journal entries\nQuery: ';
+
+    expect(mockClientGenerateEmbedding).toHaveBeenCalledWith(
+      [expectedPrefix + 'find journal entries'],
+      expect.any(String)
+    );
+  });
+});
+
+describe('OpenAIEmbeddingService truncation uses maxInputChars from config', () => {
+  let service: OpenAIEmbeddingService;
+  let mockClientGenerateEmbedding: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    vi.resetModules();
+
+    mockClientGenerateEmbedding = vi
+      .fn()
+      .mockResolvedValue([new Array(768).fill(0.1)]);
+
+    vi.doMock('../src/openai-client', () => ({
+      OpenAIClient: vi.fn().mockImplementation(() => ({
+        generateEmbedding: mockClientGenerateEmbedding,
+      })),
+    }));
+
+    // Default model (nomic) has maxInputChars=6000
+    const mod = await import('../src/openai-embedding-service');
+    service = mod.OpenAIEmbeddingService.getInstance();
+  });
+
+  test('generateEmbedding truncates at maxInputChars', async () => {
+    const longText = 'x'.repeat(7000);
+    await service.generateEmbedding(longText);
+
+    const sentText = mockClientGenerateEmbedding.mock.calls[0][0][0];
+    // nomic maxInputChars is 6000
+    expect(sentText.length).toBe(6000);
+  });
+
+  test('generateBatch truncates individual texts at maxInputChars', async () => {
+    const longText = 'y'.repeat(7000);
+    mockClientGenerateEmbedding.mockResolvedValue([new Array(768).fill(0.1)]);
+
+    await service.generateBatch([longText]);
+
+    const sentText = mockClientGenerateEmbedding.mock.calls[0][0][0];
+    expect(sentText.length).toBe(6000);
+  });
+});
+
+describe('OpenAIEmbeddingService batch splitting', () => {
+  let service: OpenAIEmbeddingService;
+  let mockClientGenerateEmbedding: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    vi.resetModules();
+
+    // Each call returns a distinct embedding so we can verify ordering
+    mockClientGenerateEmbedding = vi.fn()
+      .mockResolvedValueOnce([new Array(768).fill(0.1)])
+      .mockResolvedValueOnce([new Array(768).fill(0.2)])
+      .mockResolvedValueOnce([new Array(768).fill(0.3)]);
+
+    vi.doMock('../src/openai-client', () => ({
+      OpenAIClient: vi.fn().mockImplementation(() => ({
+        generateEmbedding: mockClientGenerateEmbedding,
+      })),
+    }));
+
+    // nomic: maxInputChars=6000, so maxBatchChars = Math.floor(6000 * 0.8) = 4800
+    const mod = await import('../src/openai-embedding-service');
+    service = mod.OpenAIEmbeddingService.getInstance();
+  });
+
+  test('splits texts into sub-batches when total chars exceed maxBatchChars', async () => {
+    // 3 texts of 2500 chars each (total 7500).
+    // maxBatchChars is 4800, so each 2500-char text starts a new sub-batch
+    // (2500 fits alone, but 2500+2500=5000 > 4800), yielding 3 sub-batches of 1 text each.
+    const textA = 'a'.repeat(2500);
+    const textB = 'b'.repeat(2500);
+    const textC = 'c'.repeat(2500);
+
+    const results = await service.generateBatch([textA, textB, textC]);
+
+    // API called once per sub-batch
+    expect(mockClientGenerateEmbedding).toHaveBeenCalledTimes(3);
+
+    // Each sub-batch contains exactly one text
+    expect(mockClientGenerateEmbedding.mock.calls[0][0]).toEqual([textA]);
+    expect(mockClientGenerateEmbedding.mock.calls[1][0]).toEqual([textB]);
+    expect(mockClientGenerateEmbedding.mock.calls[2][0]).toEqual([textC]);
+
+    // Results combined in order: [0.1-filled, 0.2-filled, 0.3-filled]
+    expect(results).toHaveLength(3);
+    expect(results[0][0]).toBeCloseTo(0.1);
+    expect(results[1][0]).toBeCloseTo(0.2);
+    expect(results[2][0]).toBeCloseTo(0.3);
+  });
+});
+
+describe('OpenAIEmbeddingService truncation with qwen3 (16000 chars)', () => {
+  let service: OpenAIEmbeddingService;
+  let mockClientGenerateEmbedding: ReturnType<typeof vi.fn>;
+  const savedModel = process.env.OPENAI_EMBEDDING_MODEL;
+
+  beforeEach(async () => {
+    vi.resetModules();
+
+    process.env.OPENAI_EMBEDDING_MODEL = 'qwen3-embedding:4b';
+
+    mockClientGenerateEmbedding = vi
+      .fn()
+      .mockResolvedValue([new Array(768).fill(0.1)]);
+
+    vi.doMock('../src/openai-client', () => ({
+      OpenAIClient: vi.fn().mockImplementation(() => ({
+        generateEmbedding: mockClientGenerateEmbedding,
+      })),
+    }));
+
+    const mod = await import('../src/openai-embedding-service');
+    service = mod.OpenAIEmbeddingService.getInstance();
+  });
+
+  afterEach(() => {
+    if (savedModel !== undefined) {
+      process.env.OPENAI_EMBEDDING_MODEL = savedModel;
+    } else {
+      delete process.env.OPENAI_EMBEDDING_MODEL;
+    }
+  });
+
+  test('generateEmbedding allows up to 16000 chars for qwen3', async () => {
+    const text = 'z'.repeat(16000);
+    await service.generateEmbedding(text);
+
+    const sentText = mockClientGenerateEmbedding.mock.calls[0][0][0];
+    expect(sentText.length).toBe(16000);
+  });
+
+  test('generateEmbedding truncates at 16000 chars for qwen3', async () => {
+    const text = 'z'.repeat(20000);
+    await service.generateEmbedding(text);
+
+    const sentText = mockClientGenerateEmbedding.mock.calls[0][0][0];
+    expect(sentText.length).toBe(16000);
   });
 });
 
