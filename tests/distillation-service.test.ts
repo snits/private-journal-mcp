@@ -21,6 +21,7 @@ describe('DistillationService', () => {
     };
     mockEmbedding = {
       generateDocumentEmbedding: vi.fn().mockResolvedValue(new Array(768).fill(0.1)),
+      getDimensions: vi.fn().mockReturnValue(768),
     };
     service = new DistillationService(mockPool, mockTextGen, mockEmbedding);
   });

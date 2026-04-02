@@ -115,7 +115,7 @@ export class PostgreSQLJournalManager {
           dateString,                                                  // $3
           filePath,                                                    // $4
           'simple',                                                    // $5
-          embeddingData.embedding && embeddingData.embedding.length === 768
+          embeddingData.embedding && embeddingData.embedding.length === this.embeddingService.getDimensions()
             ? this.formatEmbeddingForPgvector(embeddingData.embedding)
             : null,                                                    // $6
           JSON.stringify(embeddingData.sections || []),                // $7
@@ -228,7 +228,7 @@ export class PostgreSQLJournalManager {
           thoughts.agent_id ?? null,                                   // $6
           thoughts.model_id ?? null,                                   // $7
           thoughts.visibility_level ?? 'private',                      // $8
-          embeddingData.embedding && embeddingData.embedding.length === 768
+          embeddingData.embedding && embeddingData.embedding.length === this.embeddingService.getDimensions()
             ? this.formatEmbeddingForPgvector(embeddingData.embedding)
             : null,                                                    // $9
           JSON.stringify(embeddingData.sections || []),                // $10
@@ -680,8 +680,9 @@ export class PostgreSQLJournalManager {
   }
 
   private formatEmbeddingForPgvector(embedding: number[]): string {
-    if (embedding.length !== 768) {
-      throw new Error(`Expected 768-dimensional embedding, got ${embedding.length}`);
+    const expectedDimensions = this.embeddingService.getDimensions();
+    if (embedding.length !== expectedDimensions) {
+      throw new Error(`Expected ${expectedDimensions}-dimensional embedding, got ${embedding.length}`);
     }
     return `[${embedding.join(',')}]`;
   }

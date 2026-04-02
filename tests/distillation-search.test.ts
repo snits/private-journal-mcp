@@ -19,6 +19,7 @@ describe('Enhanced search with distillations', () => {
           generateQueryEmbedding: mockGenerateQueryEmbedding,
           generateDocumentEmbedding: vi.fn().mockResolvedValue(new Array(768).fill(0.1)),
           extractSearchableText: vi.fn().mockReturnValue({ text: 'text', sections: [] }),
+          getDimensions: vi.fn().mockReturnValue(768),
         }),
       },
     }));

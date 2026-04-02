@@ -2,28 +2,33 @@
 // ABOUTME: Supports batching, configurable models, and OpenAI-compatible endpoints
 
 import { OpenAIClient } from './openai-client';
+import { getModelConfig, EmbeddingModelConfig } from './embedding-config';
 
 export class OpenAIEmbeddingService {
   private static instance: OpenAIEmbeddingService;
   private client: OpenAIClient;
   private readonly modelName: string;
   private readonly dimensions: number;
+  private readonly modelConfig: EmbeddingModelConfig;
 
   private constructor() {
-    // Read configuration from environment
-    this.modelName = process.env.OPENAI_EMBEDDING_MODEL || 'nomic-embed-text';
+    // Resolve model config from presets
+    this.modelConfig = getModelConfig();
+    this.modelName = this.modelConfig.model;
 
-    // Parse dimensions with validation
-    const dimensionsEnv = process.env.OPENAI_EMBEDDING_DIMENSIONS || '768';
-    const parsed = parseInt(dimensionsEnv, 10);
-
-    if (isNaN(parsed) || parsed <= 0) {
-      throw new Error(
-        `Invalid OPENAI_EMBEDDING_DIMENSIONS: "${dimensionsEnv}". Must be a positive integer.`
-      );
+    // OPENAI_EMBEDDING_DIMENSIONS env var overrides the preset if explicitly set
+    const dimensionsEnv = process.env.OPENAI_EMBEDDING_DIMENSIONS;
+    if (dimensionsEnv !== undefined) {
+      const parsed = parseInt(dimensionsEnv, 10);
+      if (isNaN(parsed) || parsed <= 0) {
+        throw new Error(
+          `Invalid OPENAI_EMBEDDING_DIMENSIONS: "${dimensionsEnv}". Must be a positive integer.`
+        );
+      }
+      this.dimensions = parsed;
+    } else {
+      this.dimensions = this.modelConfig.dimensions;
     }
-
-    this.dimensions = parsed;
 
     // Initialize OpenAI client
     this.client = new OpenAIClient({
@@ -200,6 +205,10 @@ export class OpenAIEmbeddingService {
       name: this.modelName,
       dimensions: this.dimensions,
     };
+  }
+
+  getDimensions(): number {
+    return this.dimensions;
   }
 
   async verifyCompatibility(
