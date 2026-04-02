@@ -71,10 +71,13 @@ describe('PostgreSQLJournalManager write operations', () => {
     const sqlCall = mockClient.query.mock.calls[0][0];
     expect(sqlCall).toContain('project, project_context');
 
+    // Verify SQL query includes searchable_text column
+    expect(sqlCall).toContain('searchable_text');
+
     // Verify parameters include project context at correct positions
     const params = mockClient.query.mock.calls[0][1];
-    expect(params[9]).toBe('private-journal-mcp'); // $10 - project name
-    expect(params[10]).toBe(JSON.stringify(mockContext)); // $11 - serialized context
+    expect(params[10]).toBe('private-journal-mcp'); // $11 - project name
+    expect(params[11]).toBe(JSON.stringify(mockContext)); // $12 - serialized context
   });
 
   it('should store project context when writing thoughts', async () => {
@@ -118,10 +121,13 @@ describe('PostgreSQLJournalManager write operations', () => {
     const sqlCall = mockClient.query.mock.calls[0][0];
     expect(sqlCall).toContain('project, project_context');
 
+    // Verify SQL query includes searchable_text column
+    expect(sqlCall).toContain('searchable_text');
+
     // Verify parameters include project context
     const params = mockClient.query.mock.calls[0][1];
-    expect(params[11]).toBe('private-journal-mcp'); // $12 - project name
-    expect(params[12]).toBe(JSON.stringify(mockContext)); // $13 - serialized context
+    expect(params[12]).toBe('private-journal-mcp'); // $13 - project name
+    expect(params[13]).toBe(JSON.stringify(mockContext)); // $14 - serialized context
   });
 });
 

@@ -211,6 +211,10 @@ export class OpenAIEmbeddingService {
     return this.dimensions;
   }
 
+  getDefaultMinRelevance(): number {
+    return this.modelConfig.defaultMinRelevance;
+  }
+
   async verifyCompatibility(
     testText = 'This is a test document for embedding compatibility.'
   ): Promise<boolean> {
