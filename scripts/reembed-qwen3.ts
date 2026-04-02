@@ -62,20 +62,20 @@ function parseArgs(argv: string[]): CliArgs {
 
 // --- Pre-flight check ---
 
-async function preflightCheck(client: OpenAIClient, model: string): Promise<void> {
-  console.log('Pre-flight: embedding test string with qwen3-embedding:4b at 768 dimensions...');
+async function preflightCheck(client: OpenAIClient, model: string, dimensions: number): Promise<void> {
+  console.log(`Pre-flight: embedding test string with ${model} at ${dimensions} dimensions...`);
 
   const testText = 'Pre-flight embedding check for qwen3 migration.';
-  const embeddings = await client.generateEmbedding([testText], model, 768);
+  const embeddings = await client.generateEmbedding([testText], model, dimensions);
 
   if (!embeddings || embeddings.length === 0) {
     throw new Error('Pre-flight failed: API returned no embeddings');
   }
 
   const dims = embeddings[0].length;
-  if (dims !== 768) {
+  if (dims !== dimensions) {
     throw new Error(
-      `Pre-flight failed: expected 768 dimensions, got ${dims}. ` +
+      `Pre-flight failed: expected ${dimensions} dimensions, got ${dims}. ` +
         `Check that ${model} supports Matryoshka dimension truncation.`
     );
   }
@@ -85,10 +85,10 @@ async function preflightCheck(client: OpenAIClient, model: string): Promise<void
 
 // --- Column setup ---
 
-async function ensureQwen3Column(db: Client): Promise<void> {
+async function ensureQwen3Column(db: Client, dimensions: number): Promise<void> {
   await db.query(`
     ALTER TABLE ai_memory.journal_entries
-    ADD COLUMN IF NOT EXISTS embedding_qwen3 vector(768)
+    ADD COLUMN IF NOT EXISTS embedding_qwen3 vector(${dimensions})
   `);
   console.log('Column embedding_qwen3 ready');
 }
@@ -141,6 +141,7 @@ async function reembedBatches(
   db: Client,
   embeddingClient: OpenAIClient,
   model: string,
+  dimensions: number,
   documentPrefix: string,
   maxInputChars: number,
   batchSize: number
@@ -174,7 +175,7 @@ async function reembedBatches(
     let embeddings: number[][] | undefined;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
-        embeddings = await embeddingClient.generateEmbedding(texts, model, 768);
+        embeddings = await embeddingClient.generateEmbedding(texts, model, dimensions);
         break;
       } catch (err) {
         if (attempt === 3) {
@@ -263,8 +264,8 @@ async function main(): Promise<void> {
     concurrency: 1,
   });
 
-  // Pre-flight: verify the model produces 768-d vectors
-  await preflightCheck(embeddingClient, modelConfig.model);
+  // Pre-flight: verify the model produces correctly dimensioned vectors
+  await preflightCheck(embeddingClient, modelConfig.model, modelConfig.dimensions);
 
   // Connect to database with a single Client (not Pool) for session-level trigger control
   const dbConfig = createDatabaseConfig();
@@ -279,7 +280,7 @@ async function main(): Promise<void> {
   await db.connect();
 
   try {
-    await ensureQwen3Column(db);
+    await ensureQwen3Column(db, modelConfig.dimensions);
     const counts = await countWork(db);
     printCounts(counts);
 
@@ -300,6 +301,7 @@ async function main(): Promise<void> {
           db,
           embeddingClient,
           modelConfig.model,
+          modelConfig.dimensions,
           modelConfig.documentPrefix,
           modelConfig.maxInputChars,
           args.batchSize

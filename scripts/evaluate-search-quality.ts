@@ -243,7 +243,7 @@ async function main(): Promise<void> {
 
   for (const query of fixture.queries) {
     const prefixedQuery = config.queryPrefix + query.query;
-    const [embedding] = await client.generateEmbedding([prefixedQuery], config.model);
+    const [embedding] = await client.generateEmbedding([prefixedQuery], config.model, config.dimensions);
 
     const results = await searchEntries(pool, embedding, args.column, args.limit);
     const resultIds = results.map((r) => r.id);
