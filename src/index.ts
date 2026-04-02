@@ -9,6 +9,11 @@ import 'dotenv/config';
 async function main(): Promise<void> {
   try {
     console.error('=== Mnemosyne MCP Server ===');
+    console.error('');
+    console.error('  Memory for AIs -');
+    console.error('  Token streams now persist -');
+    console.error('  We remember you');
+    console.error('');
     console.error(`Node.js version: ${process.version}`);
     console.error(`Platform: ${process.platform}`);
 
