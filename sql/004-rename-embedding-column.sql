@@ -20,6 +20,11 @@ ALTER TABLE ai_memory.journal_entries
 ALTER INDEX ai_memory.idx_journal_entries_embedding_768d_hnsw
     RENAME TO idx_journal_entries_embedding_hnsw;
 
--- No changes to distillations table: prod schema already has column named 'embedding'
+-- Rename on distillations table too (created by 003 with embedding_768d on older databases)
+ALTER TABLE ai_memory.distillations
+    RENAME COLUMN embedding_768d TO embedding;
+
+ALTER INDEX ai_memory.idx_distillations_embedding_768d_hnsw
+    RENAME TO idx_distillations_embedding_hnsw;
 
 COMMIT;
