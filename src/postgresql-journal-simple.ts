@@ -105,9 +105,9 @@ export class PostgreSQLJournalManager {
         `
         INSERT INTO ai_memory.journal_entries (
           content, timestamp, date_string, file_path, entry_type,
-          embedding, sections, visibility_level, user_id,
+          embedding, sections, searchable_text, visibility_level, user_id,
           project, project_context, category
-        ) VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9, $10, $11, $12)
+        ) VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9, $10, $11, $12, $13)
       `,
         [
           formattedEntry,                                              // $1
@@ -119,11 +119,12 @@ export class PostgreSQLJournalManager {
             ? this.formatEmbeddingForPgvector(embeddingData.embedding)
             : null,                                                    // $6
           JSON.stringify(embeddingData.sections || []),                // $7
-          'private',                                                   // $8
-          this.userId,                                                   // $9
-          projectContext?.project ?? null,                             // $10
-          this.serializeProjectContext(projectContext),                // $11
-          extractCategory(embeddingData.sections, 'general'),         // $12
+          embeddingData.text,                                          // $8
+          'private',                                                   // $9
+          this.userId,                                                  // $10
+          projectContext?.project ?? null,                             // $11
+          this.serializeProjectContext(projectContext),                // $12
+          extractCategory(embeddingData.sections, 'general'),         // $13
         ]
       );
     } finally {
@@ -215,9 +216,9 @@ export class PostgreSQLJournalManager {
         INSERT INTO ai_memory.journal_entries (
           content, timestamp, date_string, file_path, entry_type,
           agent_id, model_id, visibility_level,
-          embedding, sections, user_id,
+          embedding, sections, searchable_text, user_id,
           project, project_context, category
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::vector, $10, $11, $12, $13, $14)
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::vector, $10, $11, $12, $13, $14, $15)
       `,
         [
           formattedEntry,                                              // $1
@@ -232,10 +233,11 @@ export class PostgreSQLJournalManager {
             ? this.formatEmbeddingForPgvector(embeddingData.embedding)
             : null,                                                    // $9
           JSON.stringify(embeddingData.sections || []),                // $10
-          this.userId,                                                   // $11
-          projectContext?.project ?? null,                             // $12
-          this.serializeProjectContext(projectContext),                // $13
-          extractCategory(embeddingData.sections, type === 'project' ? 'technical' : null), // $14
+          embeddingData.text,                                          // $11
+          this.userId,                                                  // $12
+          projectContext?.project ?? null,                             // $13
+          this.serializeProjectContext(projectContext),                // $14
+          extractCategory(embeddingData.sections, type === 'project' ? 'technical' : null), // $15
         ]
       );
     } finally {
@@ -247,7 +249,7 @@ export class PostgreSQLJournalManager {
     content: string,
     timestamp: Date,
     filePath: string
-  ): Promise<{ embedding: number[]; text: string; sections: string[] }> {
+  ): Promise<{ embedding: number[]; text: string | null; sections: string[] }> {
     try {
       const { text, sections } = this.embeddingService.extractSearchableText(content);
 
@@ -270,7 +272,7 @@ export class PostgreSQLJournalManager {
       console.error(`Failed to generate embedding for ${filePath}:`, error);
       return {
         embedding: [],
-        text: '',
+        text: null,
         sections: [],
       };
     }
