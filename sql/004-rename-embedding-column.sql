@@ -1,6 +1,10 @@
 -- 004-rename-embedding-column.sql
 -- Renames embedding_768d to embedding on journal_entries, removing the
 -- dimension-specific suffix so future model changes don't require column renames.
+--
+-- Only needed for databases that applied the original schema files (001, 002, 003)
+-- before the column rename. Fresh databases using the updated schema files already
+-- have the correct column name and do not need this migration.
 
 BEGIN;
 
