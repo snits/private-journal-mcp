@@ -379,3 +379,41 @@ describe('OpenAIEmbeddingService dimension override', () => {
     expect(service.getDimensions()).toBe(768);
   });
 });
+
+describe('OpenAIEmbeddingService getDefaultMinRelevance', () => {
+  afterEach(() => {
+    delete process.env.OPENAI_EMBEDDING_MODEL;
+  });
+
+  test('returns 0.6 for nomic-embed-text (default model)', async () => {
+    vi.resetModules();
+    delete process.env.OPENAI_EMBEDDING_MODEL;
+
+    vi.doMock('../src/openai-client', () => ({
+      OpenAIClient: vi.fn().mockImplementation(() => ({
+        generateEmbedding: vi.fn().mockResolvedValue([new Array(768).fill(0.1)]),
+      })),
+    }));
+
+    const mod = await import('../src/openai-embedding-service');
+    const service = mod.OpenAIEmbeddingService.getInstance();
+
+    expect(service.getDefaultMinRelevance()).toBe(0.6);
+  });
+
+  test('returns 0.40 for qwen3-embedding:4b', async () => {
+    vi.resetModules();
+    process.env.OPENAI_EMBEDDING_MODEL = 'qwen3-embedding:4b';
+
+    vi.doMock('../src/openai-client', () => ({
+      OpenAIClient: vi.fn().mockImplementation(() => ({
+        generateEmbedding: vi.fn().mockResolvedValue([new Array(768).fill(0.1)]),
+      })),
+    }));
+
+    const mod = await import('../src/openai-embedding-service');
+    const service = mod.OpenAIEmbeddingService.getInstance();
+
+    expect(service.getDefaultMinRelevance()).toBe(0.40);
+  });
+});

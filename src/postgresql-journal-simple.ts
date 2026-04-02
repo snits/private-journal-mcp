@@ -342,7 +342,7 @@ export class PostgreSQLJournalManager {
     const embeddingParamIndex = paramIndex++;
 
     // Add minimum similarity threshold
-    const minSimilarity = options.min_relevance ?? 0.6;
+    const minSimilarity = options.min_relevance ?? this.embeddingService.getDefaultMinRelevance();
     params.push(minSimilarity);
     const minSimilarityIndex = paramIndex++;
 
