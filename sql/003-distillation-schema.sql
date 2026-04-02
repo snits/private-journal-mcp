@@ -19,7 +19,7 @@ CREATE TABLE ai_memory.distillations (
     key_insights  text[] NOT NULL DEFAULT '{}'::text[],
     category      varchar(50) NOT NULL,
     model         varchar(100) NOT NULL,
-    embedding_768d public.vector(768),
+    embedding public.vector(768),
     created_at    timestamptz NOT NULL DEFAULT now(),
     updated_at    timestamptz NOT NULL DEFAULT now(),
 
@@ -34,9 +34,9 @@ CREATE TABLE ai_memory.distillations (
         ))
 );
 
-CREATE INDEX idx_distillations_embedding_768d_hnsw
+CREATE INDEX idx_distillations_embedding_hnsw
     ON ai_memory.distillations
-    USING hnsw (embedding_768d public.vector_cosine_ops);
+    USING hnsw (embedding public.vector_cosine_ops);
 
 CREATE INDEX idx_distillations_category
     ON ai_memory.distillations (category);

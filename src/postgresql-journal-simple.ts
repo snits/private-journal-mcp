@@ -105,7 +105,7 @@ export class PostgreSQLJournalManager {
         `
         INSERT INTO ai_memory.journal_entries (
           content, timestamp, date_string, file_path, entry_type,
-          embedding_768d, sections, visibility_level, user_id,
+          embedding, sections, visibility_level, user_id,
           project, project_context, category
         ) VALUES ($1, $2, $3, $4, $5, $6::vector, $7, $8, $9, $10, $11, $12)
       `,
@@ -215,7 +215,7 @@ export class PostgreSQLJournalManager {
         INSERT INTO ai_memory.journal_entries (
           content, timestamp, date_string, file_path, entry_type,
           agent_id, model_id, visibility_level,
-          embedding_768d, sections, user_id,
+          embedding, sections, user_id,
           project, project_context, category
         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::vector, $10, $11, $12, $13, $14)
       `,
@@ -283,7 +283,7 @@ export class PostgreSQLJournalManager {
     const queryEmbedding = await this.embeddingService.generateQueryEmbedding(query);
 
     // Build WHERE clauses for filtering
-    const whereClauses: string[] = ['embedding_768d IS NOT NULL'];
+    const whereClauses: string[] = ['embedding IS NOT NULL'];
     const params: any[] = [];
     let paramIndex = 1;
 
@@ -356,11 +356,11 @@ export class PostgreSQLJournalManager {
       SELECT id, content, timestamp, file_path, agent_id, model_id,
              visibility_level, entry_type, searchable_text, sections,
              project, project_context,
-             1 - (embedding_768d <=> $${embeddingParamIndex}::vector) AS score
+             1 - (embedding <=> $${embeddingParamIndex}::vector) AS score
       FROM ai_memory.journal_entries
       WHERE ${whereClause}
-        AND (1 - (embedding_768d <=> $${embeddingParamIndex}::vector)) >= $${minSimilarityIndex}
-      ORDER BY embedding_768d <=> $${embeddingParamIndex}::vector
+        AND (1 - (embedding <=> $${embeddingParamIndex}::vector)) >= $${minSimilarityIndex}
+      ORDER BY embedding <=> $${embeddingParamIndex}::vector
       LIMIT $${limitIndex}
     `;
 
@@ -407,13 +407,13 @@ export class PostgreSQLJournalManager {
              d.created_at AS timestamp,
              ds.entry_id AS source_entry_id,
              je.file_path AS source_entry_path,
-             1 - (d.embedding_768d <=> $1::vector) AS score
+             1 - (d.embedding <=> $1::vector) AS score
       FROM ai_memory.distillations d
       LEFT JOIN ai_memory.distillation_sources ds ON d.id = ds.distillation_id
       LEFT JOIN ai_memory.journal_entries je ON ds.entry_id = je.id
-      WHERE d.embedding_768d IS NOT NULL
-        AND (1 - (d.embedding_768d <=> $1::vector)) >= $2
-      ORDER BY d.embedding_768d <=> $1::vector
+      WHERE d.embedding IS NOT NULL
+        AND (1 - (d.embedding <=> $1::vector)) >= $2
+      ORDER BY d.embedding <=> $1::vector
       LIMIT $3
     `;
 

@@ -41,7 +41,7 @@ async function verifySchema() {
     const requiredColumns = [
       { name: 'project', type: 'character varying' },
       { name: 'project_context', type: 'jsonb' },
-      { name: 'embedding_768d', type: 'USER-DEFINED' }, // pgvector types show as USER-DEFINED
+      { name: 'embedding', type: 'USER-DEFINED' }, // pgvector types show as USER-DEFINED
     ];
 
     const columnsResult = await pool.query<ColumnInfo>(`
@@ -86,7 +86,7 @@ async function verifySchema() {
 
     const indexes = indexesResult.rows;
     const requiredIndexes = [
-      'idx_journal_entries_embedding_768d_hnsw',
+      'idx_journal_entries_embedding_hnsw',
       'idx_journal_entries_project',
     ];
 
@@ -111,7 +111,7 @@ async function verifySchema() {
     console.log('--- Data Migration Status ---');
 
     // Check which columns exist
-    const hasEmbedding768d = columns.find((c) => c.column_name === 'embedding_768d');
+    const hasEmbedding768d = columns.find((c) => c.column_name === 'embedding');
     const hasProject = columns.find((c) => c.column_name === 'project');
     const hasProjectContext = columns.find((c) => c.column_name === 'project_context');
 
@@ -122,8 +122,8 @@ async function verifySchema() {
       // Build dynamic query based on which columns exist
       const filters = [];
       if (hasEmbedding768d) {
-        filters.push('COUNT(*) FILTER (WHERE embedding_768d IS NOT NULL) as has_vector_embedding');
-        filters.push('COUNT(*) FILTER (WHERE embedding IS NOT NULL AND embedding_768d IS NULL) as needs_embedding_migration');
+        filters.push('COUNT(*) FILTER (WHERE embedding IS NOT NULL) as has_vector_embedding');
+        filters.push('COUNT(*) FILTER (WHERE embedding IS NOT NULL AND embedding IS NULL) as needs_embedding_migration');
       }
       if (hasProject) {
         filters.push('COUNT(*) FILTER (WHERE project IS NOT NULL) as has_project');

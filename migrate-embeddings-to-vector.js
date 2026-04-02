@@ -57,7 +57,7 @@ async function migrateEmbeddings(batchSize = 100) {
       SELECT COUNT(*) as total
       FROM ai_memory.journal_entries
       WHERE embedding IS NOT NULL
-        AND embedding_768d IS NULL
+        AND embedding IS NULL
         AND octet_length(embedding) > 0
     `);
         const totalToMigrate = parseInt(countResult.rows[0].total);
@@ -79,7 +79,7 @@ async function migrateEmbeddings(batchSize = 100) {
         SELECT id, embedding, file_path
         FROM ai_memory.journal_entries
         WHERE embedding IS NOT NULL
-          AND embedding_768d IS NULL
+          AND embedding IS NULL
           AND octet_length(embedding) > 0
         ORDER BY id
         LIMIT $1
@@ -105,9 +105,9 @@ async function migrateEmbeddings(batchSize = 100) {
                             totalErrors++;
                             continue;
                         }
-                        // Update embedding_768d column with array literal format
+                        // Update embedding column with array literal format
                         const vectorLiteral = `[${embeddingArray.join(',')}]`;
-                        await client.query('UPDATE ai_memory.journal_entries SET embedding_768d = $1::vector WHERE id = $2', [vectorLiteral, entry.id]);
+                        await client.query('UPDATE ai_memory.journal_entries SET embedding = $1::vector WHERE id = $2', [vectorLiteral, entry.id]);
                         totalMigrated++;
                     }
                     catch (error) {
@@ -140,9 +140,9 @@ async function migrateEmbeddings(batchSize = 100) {
         console.log('=== Verification ===');
         const verifyResult = await pool.query(`
       SELECT
-        COUNT(*) FILTER (WHERE embedding IS NOT NULL AND embedding_768d IS NULL AND octet_length(embedding) > 0) as legacy_only,
+        COUNT(*) FILTER (WHERE embedding IS NOT NULL AND embedding IS NULL AND octet_length(embedding) > 0) as legacy_only,
         COUNT(*) FILTER (WHERE embedding IS NOT NULL AND octet_length(embedding) = 0) as empty_embedding,
-        COUNT(*) FILTER (WHERE embedding_768d IS NOT NULL) as new_format,
+        COUNT(*) FILTER (WHERE embedding IS NOT NULL) as new_format,
         COUNT(*) as total
       FROM ai_memory.journal_entries
     `);

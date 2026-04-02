@@ -41,13 +41,13 @@ async function verifyHNSWIndex() {
     const statsResult = await pool.query(`
       SELECT
         COUNT(*) as total_entries,
-        COUNT(embedding_768d) as entries_with_embedding,
-        COUNT(*) - COUNT(embedding_768d) as entries_without_embedding
+        COUNT(embedding) as entries_with_embedding,
+        COUNT(*) - COUNT(embedding) as entries_without_embedding
       FROM ai_memory.journal_entries
     `);
     console.log(`Total entries: ${statsResult.rows[0].total_entries}`);
-    console.log(`Entries with embedding_768d: ${statsResult.rows[0].entries_with_embedding}`);
-    console.log(`Entries without embedding_768d: ${statsResult.rows[0].entries_without_embedding}`);
+    console.log(`Entries with embedding: ${statsResult.rows[0].entries_with_embedding}`);
+    console.log(`Entries without embedding: ${statsResult.rows[0].entries_without_embedding}`);
     console.log();
 
     // Step 3: Verify HNSW index exists
@@ -85,11 +85,11 @@ async function verifyHNSWIndex() {
       EXPLAIN (ANALYZE, BUFFERS, VERBOSE)
       SELECT
         id,
-        1 - (embedding_768d <=> $1::vector) AS score
+        1 - (embedding <=> $1::vector) AS score
       FROM ai_memory.journal_entries
-      WHERE embedding_768d IS NOT NULL
-        AND (1 - (embedding_768d <=> $1::vector)) >= $2
-      ORDER BY embedding_768d <=> $1::vector
+      WHERE embedding IS NOT NULL
+        AND (1 - (embedding <=> $1::vector)) >= $2
+      ORDER BY embedding <=> $1::vector
       LIMIT $3
     `;
 
@@ -111,7 +111,7 @@ async function verifyHNSWIndex() {
     console.log('----------------');
     const planText = planResult.rows.map(r => r['QUERY PLAN']).join('\n');
 
-    const usesHNSW = planText.includes('idx_journal_entries_embedding_768d_hnsw');
+    const usesHNSW = planText.includes('idx_journal_entries_embedding_hnsw');
     const usesIndexScan = planText.includes('Index Scan');
     const usesSeqScan = planText.includes('Seq Scan');
 
