@@ -47,7 +47,7 @@ export class TextGenerationClient {
           model: this.model,
           messages: [{ role: 'user', content: prompt }],
           temperature: options?.temperature ?? 0.3,
-          max_tokens: options?.maxTokens ?? 2048,
+          max_tokens: options?.maxTokens ?? 4096,
           ...(options?.responseFormat && { response_format: options.responseFormat }),
           ...(!this.thinking && { reasoning_effort: 'none' as const }),
         }),
