@@ -6,6 +6,7 @@ export interface TextGenerationConfig {
   model?: string;
   apiKey?: string;
   timeout?: number;
+  thinking?: boolean;
 }
 
 export class TextGenerationClient {
@@ -13,12 +14,14 @@ export class TextGenerationClient {
   private model: string;
   private apiKey: string;
   private timeout: number;
+  private thinking: boolean;
 
   constructor(config: TextGenerationConfig = {}) {
     this.baseUrl = config.baseUrl || process.env.OPENAI_CHAT_BASE_URL || 'http://localhost:11434/v1';
     this.model = config.model || process.env.OPENAI_CHAT_MODEL || 'qwen3.5:32k';
     this.apiKey = config.apiKey || process.env.OPENAI_API_KEY || '';
     this.timeout = config.timeout || 120000;
+    this.thinking = config.thinking ?? (process.env.OPENAI_CHAT_THINKING !== 'false');
   }
 
   getModel(): string {
@@ -46,6 +49,7 @@ export class TextGenerationClient {
           temperature: options?.temperature ?? 0.3,
           max_tokens: options?.maxTokens ?? 2048,
           ...(options?.responseFormat && { response_format: options.responseFormat }),
+          ...(!this.thinking && { reasoning_effort: 'none' as const }),
         }),
         signal: controller.signal,
       });

@@ -136,6 +136,75 @@ describe('TextGenerationClient', () => {
       expect(body.response_format).toEqual({ type: 'json_object' });
     });
 
+    test('includes reasoning_effort none when thinking is false', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'result' } }],
+        }),
+      });
+      const client = new TextGenerationClient({
+        baseUrl: 'http://test:1234/v1',
+        model: 'test-model',
+        thinking: false,
+      });
+      await client.generate('prompt');
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.reasoning_effort).toBe('none');
+    });
+
+    test('excludes reasoning_effort when thinking is true', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'result' } }],
+        }),
+      });
+      const client = new TextGenerationClient({
+        baseUrl: 'http://test:1234/v1',
+        model: 'test-model',
+        thinking: true,
+      });
+      await client.generate('prompt');
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.reasoning_effort).toBeUndefined();
+    });
+
+    test('excludes reasoning_effort by default', async () => {
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'result' } }],
+        }),
+      });
+      const client = new TextGenerationClient({
+        baseUrl: 'http://test:1234/v1',
+        model: 'test-model',
+      });
+      await client.generate('prompt');
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.reasoning_effort).toBeUndefined();
+    });
+
+    test('env var OPENAI_CHAT_THINKING=false disables thinking', async () => {
+      const originalEnv = { ...process.env };
+      process.env.OPENAI_CHAT_THINKING = 'false';
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: 'result' } }],
+        }),
+      });
+      const client = new TextGenerationClient({
+        baseUrl: 'http://test:1234/v1',
+        model: 'test-model',
+      });
+      await client.generate('prompt');
+      const body = JSON.parse(mockFetch.mock.calls[0][1].body);
+      expect(body.reasoning_effort).toBe('none');
+      process.env = originalEnv;
+    });
+
     test('excludes response_format when not provided', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
