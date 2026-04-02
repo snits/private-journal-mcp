@@ -30,7 +30,8 @@ describe('OpenAIEmbeddingService task prefixes (nomic defaults)', () => {
 
     expect(mockClientGenerateEmbedding).toHaveBeenCalledWith(
       ['search_document: journal entry about testing'],
-      expect.any(String)
+      expect.any(String),
+      expect.any(Number)
     );
   });
 
@@ -39,7 +40,8 @@ describe('OpenAIEmbeddingService task prefixes (nomic defaults)', () => {
 
     expect(mockClientGenerateEmbedding).toHaveBeenCalledWith(
       ['search_query: find entries about architecture'],
-      expect.any(String)
+      expect.any(String),
+      expect.any(Number)
     );
   });
 
@@ -61,7 +63,8 @@ describe('OpenAIEmbeddingService task prefixes (nomic defaults)', () => {
 
     expect(mockClientGenerateEmbedding).toHaveBeenCalledWith(
       ['plain text without prefix'],
-      expect.any(String)
+      expect.any(String),
+      expect.any(Number)
     );
   });
 });
@@ -104,7 +107,8 @@ describe('OpenAIEmbeddingService with qwen3 config', () => {
     // qwen3 documentPrefix is '' so the text is passed as-is
     expect(mockClientGenerateEmbedding).toHaveBeenCalledWith(
       ['some document text'],
-      expect.any(String)
+      expect.any(String),
+      expect.any(Number)
     );
   });
 
@@ -116,8 +120,74 @@ describe('OpenAIEmbeddingService with qwen3 config', () => {
 
     expect(mockClientGenerateEmbedding).toHaveBeenCalledWith(
       [expectedPrefix + 'find journal entries'],
-      expect.any(String)
+      expect.any(String),
+      expect.any(Number)
     );
+  });
+});
+
+describe('OpenAIEmbeddingService passes dimensions to client', () => {
+  let service: OpenAIEmbeddingService;
+  let mockClientGenerateEmbedding: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    vi.resetModules();
+
+    mockClientGenerateEmbedding = vi
+      .fn()
+      .mockResolvedValue([new Array(768).fill(0.1)]);
+
+    vi.doMock('../src/openai-client', () => ({
+      OpenAIClient: vi.fn().mockImplementation(() => ({
+        generateEmbedding: mockClientGenerateEmbedding,
+      })),
+    }));
+
+    // Default model (nomic) has dimensions=768
+    const mod = await import('../src/openai-embedding-service');
+    service = mod.OpenAIEmbeddingService.getInstance();
+  });
+
+  test('generateEmbedding passes dimensions from config to client', async () => {
+    await service.generateEmbedding('test text');
+
+    expect(mockClientGenerateEmbedding).toHaveBeenCalledWith(
+      ['test text'],
+      'nomic-embed-text',
+      768
+    );
+  });
+
+  test('generateBatch passes dimensions for small batches', async () => {
+    mockClientGenerateEmbedding.mockResolvedValue([
+      new Array(768).fill(0.1),
+      new Array(768).fill(0.2),
+    ]);
+
+    await service.generateBatch(['text one', 'text two']);
+
+    expect(mockClientGenerateEmbedding).toHaveBeenCalledWith(
+      ['text one', 'text two'],
+      'nomic-embed-text',
+      768
+    );
+  });
+
+  test('generateBatch passes dimensions for sub-batches', async () => {
+    // Force sub-batching by using texts that exceed maxBatchChars (4800 for nomic)
+    mockClientGenerateEmbedding
+      .mockResolvedValueOnce([new Array(768).fill(0.1)])
+      .mockResolvedValueOnce([new Array(768).fill(0.2)]);
+
+    const largeText1 = 'a'.repeat(3000);
+    const largeText2 = 'b'.repeat(3000);
+
+    await service.generateBatch([largeText1, largeText2]);
+
+    // Both sub-batch calls should include dimensions
+    for (const call of mockClientGenerateEmbedding.mock.calls) {
+      expect(call[2]).toBe(768);
+    }
   });
 });
 

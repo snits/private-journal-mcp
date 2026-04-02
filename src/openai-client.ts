@@ -14,6 +14,7 @@ export interface OpenAIEmbeddingRequest {
   input: string | string[];
   model: string;
   encoding_format?: 'float';
+  dimensions?: number;
 }
 
 export interface OpenAIEmbeddingResponse {
@@ -46,7 +47,7 @@ export class OpenAIClient {
     });
   }
 
-  async generateEmbedding(texts: string[], model: string): Promise<number[][]> {
+  async generateEmbedding(texts: string[], model: string, dimensions?: number): Promise<number[][]> {
     return this.queue.add(async () => {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), this.timeout);
@@ -56,6 +57,7 @@ export class OpenAIClient {
           input: texts,
           model,
           encoding_format: 'float',
+          ...(dimensions !== undefined && { dimensions }),
         };
 
         const response = await fetch(`${this.baseUrl}/embeddings`, {
