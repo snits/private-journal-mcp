@@ -42,7 +42,7 @@ interface QueryResult {
 
 // --- Column whitelist ---
 
-const ALLOWED_COLUMNS = ['embedding', 'embedding_768d', 'embedding_qwen3'];
+const ALLOWED_COLUMNS = ['embedding', 'embedding_qwen3'];
 
 function validateColumn(column: string): void {
   if (!ALLOWED_COLUMNS.includes(column)) {
