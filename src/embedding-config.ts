@@ -41,7 +41,7 @@ export function getModelConfig(modelName?: string): EmbeddingModelConfig {
 
   const preset = MODEL_CONFIGS[resolvedName];
   if (preset) {
-    return preset;
+    return { ...preset };
   }
 
   // Ollama appends ':latest' as the default tag — try without it
@@ -49,7 +49,7 @@ export function getModelConfig(modelName?: string): EmbeddingModelConfig {
     const baseName = resolvedName.slice(0, -':latest'.length);
     const basePreset = MODEL_CONFIGS[baseName];
     if (basePreset) {
-      return basePreset;
+      return { ...basePreset };
     }
   }
 
