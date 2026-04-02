@@ -33,7 +33,6 @@ interface SearchResult {
 interface QueryResult {
   query: EvalQuery;
   results: SearchResult[];
-  recallAtK: number;
   recallAt3: number;
   recallAt5: number;
   reciprocalRank: number;
@@ -123,7 +122,7 @@ async function searchEntries(
   column: string,
   limit: number
 ): Promise<SearchResult[]> {
-  // Column is validated against whitelist before reaching here
+  validateColumn(column);
   const vectorStr = `[${embedding.join(',')}]`;
   const sql = `
     SELECT id, file_path, LEFT(searchable_text, 80) as snippet,
@@ -153,10 +152,11 @@ function printQueryResult(qr: QueryResult, verbose: boolean): void {
 
   console.log(`\nQuery ${query.id}: "${query.query}"`);
   console.log(`  Expected: [${query.expected_entry_ids.join(', ')}]`);
+  const expectedCount = query.expected_entry_ids.length;
+  const pct = expectedCount > 0 ? ((foundIds.length / expectedCount) * 100).toFixed(1) : '100.0';
   console.log(
     `  Found in top ${query.must_be_in_top_k}: [${foundIds.join(', ')}]  ` +
-      `(${foundIds.length}/${query.expected_entry_ids.length} = ` +
-      `${((foundIds.length / query.expected_entry_ids.length) * 100).toFixed(1)}%)`
+      `(${foundIds.length}/${expectedCount} = ${pct}%)`
   );
 
   if (reciprocalRank > 0) {
@@ -255,7 +255,6 @@ async function main(): Promise<void> {
     const qr: QueryResult = {
       query,
       results,
-      recallAtK: computeRecall(query.expected_entry_ids, resultIds, query.must_be_in_top_k),
       recallAt3: computeRecall(query.expected_entry_ids, resultIds, 3),
       recallAt5: computeRecall(query.expected_entry_ids, resultIds, 5),
       reciprocalRank: computeReciprocalRank(query.expected_entry_ids, resultIds),
