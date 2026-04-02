@@ -89,10 +89,10 @@ describe('TextGenerationClient', () => {
         baseUrl: 'http://test:1234/v1',
         model: 'test-model',
       });
-      await client.generate('prompt', { temperature: 0.8, maxTokens: 2048 });
+      await client.generate('prompt', { temperature: 0.8, maxTokens: 4096 });
       const body = JSON.parse(mockFetch.mock.calls[0][1].body);
       expect(body.temperature).toBe(0.8);
-      expect(body.max_tokens).toBe(2048);
+      expect(body.max_tokens).toBe(4096);
     });
 
     test('throws on non-ok response', async () => {

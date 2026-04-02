@@ -28,7 +28,7 @@ export class TextGenerationClient {
   async generate(prompt: string, options?: {
     temperature?: number;
     maxTokens?: number;
-    responseFormat?: { type: string };
+    responseFormat?: { type: 'text' | 'json_object' | 'json_schema' };
   }): Promise<string> {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), this.timeout);
