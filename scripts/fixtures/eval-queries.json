@@ -1,0 +1,240 @@
+{
+  "description": "Evaluation queries for embedding model comparison. Each query has ground-truth entry IDs verified via text search against mnemosyne_test database.",
+  "created": "2026-04-02",
+  "queries": [
+    {
+      "id": "q01",
+      "query": "PostgreSQL migration from SQLite for the journal system",
+      "description": "Broad database migration topic covering the Sprint 4.1 migration work. Tests whether the model links 'migration' with both source (SQLite) and target (PostgreSQL).",
+      "expected_entry_ids": [4852, 4848, 4855],
+      "expected_file_paths": [
+        "user/2025-08-08/13-58-45-854811.md",
+        "user/2025-08-08/13-47-48-547609.md",
+        "project/2025-08-08/14-32-17-660380.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q02",
+      "query": "embedding generation and vector similarity search with pgvector",
+      "description": "Specific technical topic combining embeddings and pgvector. Tests precision on a niche intersection of two concepts.",
+      "expected_entry_ids": [4857, 4852],
+      "expected_file_paths": [
+        "project/2025-08-08/14-47-17-888728.md",
+        "user/2025-08-08/13-58-45-854811.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q03",
+      "query": "TypeScript compilation errors and type safety fixes",
+      "description": "Common development topic. Multiple entries discuss fixing TS errors across different sprints, testing recall across dispersed entries.",
+      "expected_entry_ids": [4840, 4826, 4786],
+      "expected_file_paths": [
+        "user/2025-08-08/12-24-54-781653.md",
+        "user/2025-08-08/10-34-52-650478.md",
+        "user/2025-08-07/16-46-36-959521.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q04",
+      "query": "IOMMU and DMA mapping driver bugs in the Linux kernel",
+      "description": "Niche kernel subsystem topic. Jerry's domain expertise area. Tests whether model captures hardware/kernel vocabulary.",
+      "expected_entry_ids": [4640, 4641, 4643],
+      "expected_file_paths": [
+        "user/2025-08-05/14-53-29-476093.md",
+        "user/2025-08-05/14-54-14-063872.md",
+        "user/2025-08-05/14-56-19-521361.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q05",
+      "query": "ACPI firmware table debugging with DMAR and IVRS",
+      "description": "Very specific hardware debugging topic. Only 2 entries match -- tests precision on rare terms. Wider top_k since this is niche.",
+      "expected_entry_ids": [4644, 4643],
+      "expected_file_paths": [
+        "user/2025-08-05/14-57-50-441642.md",
+        "user/2025-08-05/14-56-19-521361.md"
+      ],
+      "must_be_in_top_k": 10
+    },
+    {
+      "id": "q06",
+      "query": "deploying a CUDA-accelerated SageMath MCP server with Podman",
+      "description": "Project-specific query combining GPU computing, math software, and container deployment. Tests multi-concept precision.",
+      "expected_entry_ids": [4703, 4702, 4708],
+      "expected_file_paths": [
+        "user/2025-08-06/23-03-55-522072.md",
+        "project/2025-08-06/23-03-55-522283.md",
+        "project/2025-08-07/07-16-09-961621.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q07",
+      "query": "rhgit monolith refactoring to service-oriented architecture",
+      "description": "Project-specific architectural transformation. Multiple entries document the journey from analysis to completion.",
+      "expected_entry_ids": [4608, 4604, 4605, 4586],
+      "expected_file_paths": [
+        "project/2025-08-04/15-50-21-979021.md",
+        "project/2025-08-04/15-40-02-834311.md",
+        "user/2025-08-04/15-40-02-834317.md",
+        "user/2025-08-04/14-17-17-603867.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q08",
+      "query": "unified pip-installable package for kernel development tools",
+      "description": "Project-specific query about consolidating multiple Python tools into one installable package.",
+      "expected_entry_ids": [4649, 4650, 4648],
+      "expected_file_paths": [
+        "project/2025-08-05/16-21-56-222934.md",
+        "user/2025-08-05/16-21-56-222366.md",
+        "user/2025-08-05/15-57-42-774396.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q09",
+      "query": "ServiceAdapter dependency injection pattern across tools",
+      "description": "Architecture pattern query. Tests whether model links the specific pattern name to its implementations in config_check and find-fix.",
+      "expected_entry_ids": [4497, 4486, 4498],
+      "expected_file_paths": [
+        "user/2025-08-01/00-48-10-000728.md",
+        "user/2025-07-31/22-54-05-000255.md",
+        "user/2025-08-01/00-56-04-000299.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q10",
+      "query": "test driven development methodology with comprehensive test suites",
+      "description": "Development practice query. Many entries discuss TDD, but these are the most focused on methodology rather than just mentioning it.",
+      "expected_entry_ids": [4816, 4830, 4822],
+      "expected_file_paths": [
+        "user/2025-08-07/23-14-54-679180.md",
+        "user/2025-08-08/11-16-37-335942.md",
+        "user/2025-08-08/09-34-03-586342.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q11",
+      "query": "debugging NaN values and floating point precision issues in tests",
+      "description": "Specific debugging topic. Tests whether model captures the relationship between NaN, precision, and test failures.",
+      "expected_entry_ids": [4831, 4838],
+      "expected_file_paths": [
+        "user/2025-08-08/11-19-05-017628.md",
+        "user/2025-08-08/12-17-45-014601.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q12",
+      "query": "systematic root cause analysis for failing test suites",
+      "description": "Debugging methodology query. Tests whether the model can find entries about debugging approach rather than specific bugs.",
+      "expected_entry_ids": [4843, 4844, 4823],
+      "expected_file_paths": [
+        "user/2025-08-08/13-00-52-694147.md",
+        "user/2025-08-08/13-12-43-271938.md",
+        "user/2025-08-08/10-13-13-643300.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q13",
+      "query": "subtle bug in proxy pattern causing test environment failures",
+      "description": "Specific debugging story about a proxy pattern bug. Tests whether the model can match a precise technical narrative.",
+      "expected_entry_ids": [4784, 4825],
+      "expected_file_paths": [
+        "user/2025-08-07/16-36-57-547657.md",
+        "user/2025-08-08/10-19-22-470716.md"
+      ],
+      "must_be_in_top_k": 10
+    },
+    {
+      "id": "q14",
+      "query": "security review and vulnerability assessment of refactored code",
+      "description": "Cross-cutting concern query. Tests recall across security reviews done for different projects (rhgit, distillation).",
+      "expected_entry_ids": [4602, 4603, 4758, 4759],
+      "expected_file_paths": [
+        "project/2025-08-04/15-35-29-510640.md",
+        "user/2025-08-04/15-35-29-510052.md",
+        "project/2025-08-07/10-09-37-333649.md",
+        "user/2025-08-07/10-09-37-333015.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q15",
+      "query": "BatchExecutor orchestration engine design and implementation",
+      "description": "Specific component query within the distillation system. Tests whether model finds the architecture and implementation entries.",
+      "expected_entry_ids": [4830, 4831],
+      "expected_file_paths": [
+        "user/2025-08-08/11-16-37-335942.md",
+        "user/2025-08-08/11-19-05-017628.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q16",
+      "query": "human-AI collaboration and intelligence augmentation philosophy",
+      "description": "Philosophical/reflective query about working relationship and AGI vs augmentation distinction. Tests semantic grasp of abstract concepts.",
+      "expected_entry_ids": [4697, 4698, 4701],
+      "expected_file_paths": [
+        "user/2025-08-05/18-33-09-143227.md",
+        "user/2025-08-05/18-33-55-778427.md",
+        "user/2025-08-05/18-36-48-278458.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q17",
+      "query": "hierarchical reasoning model with human oversight of AI agents",
+      "description": "Abstract concept query about a specific model discussed in the journal. Tests whether embedding captures conceptual themes.",
+      "expected_entry_ids": [4696, 4701],
+      "expected_file_paths": [
+        "user/2025-08-05/18-32-27-842671.md",
+        "user/2025-08-05/18-36-48-278458.md"
+      ],
+      "must_be_in_top_k": 10
+    },
+    {
+      "id": "q18",
+      "query": "frustration with delivering code that has compilation errors",
+      "description": "Emotional self-reflection entry. Tests whether model can match affect-laden queries to honest self-critique journal entries.",
+      "expected_entry_ids": [4778, 4792],
+      "expected_file_paths": [
+        "user/2025-08-07/14-12-22-890812.md",
+        "user/2025-08-07/16-52-59-540762.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q19",
+      "query": "blocking commits that don't meet quality standards in code review",
+      "description": "Process/practice query about enforcing quality gates. Tests whether model distinguishes process discipline from general code review.",
+      "expected_entry_ids": [4794, 4777],
+      "expected_file_paths": [
+        "user/2025-08-07/16-55-04-169686.md",
+        "user/2025-08-07/14-11-37-679007.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q20",
+      "query": "satisfaction and pride after completing a major refactoring project",
+      "description": "Pure emotional/reflective query. Tests whether model captures sentiment and accomplishment themes without specific technical terms.",
+      "expected_entry_ids": [3650, 3651, 4234],
+      "expected_file_paths": [
+        "user/2025-07-18/00-59-22-000001.md",
+        "user/2025-07-18/01-03-32-000259.md",
+        "user/2025-07-29/23-23-46-000406.md"
+      ],
+      "must_be_in_top_k": 10
+    }
+  ]
+}

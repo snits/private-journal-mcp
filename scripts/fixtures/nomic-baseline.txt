@@ -1,0 +1,128 @@
+=== Evaluation: nomic-embed-text (column: embedding) ===
+
+Query q01: "PostgreSQL migration from SQLite for the journal system"
+  Expected: [4852, 4848, 4855]
+  Found in top 5: []  (0/3 = 0.0%)
+  First expected at rank: not found  (RR = 0.000)
+  Score range: 0.71 - 0.73
+
+Query q02: "embedding generation and vector similarity search with pgvector"
+  Expected: [4857, 4852]
+  Found in top 5: []  (0/2 = 0.0%)
+  First expected at rank: not found  (RR = 0.000)
+  Score range: 0.67 - 0.75
+
+Query q03: "TypeScript compilation errors and type safety fixes"
+  Expected: [4840, 4826, 4786]
+  Found in top 5: [4840]  (1/3 = 33.3%)
+  First expected at rank: 3  (RR = 0.333)
+  Score range: 0.73 - 0.77
+
+Query q04: "IOMMU and DMA mapping driver bugs in the Linux kernel"
+  Expected: [4640, 4641, 4643]
+  Found in top 5: []  (0/3 = 0.0%)
+  First expected at rank: 6  (RR = 0.167)
+  Score range: 0.69 - 0.74
+
+Query q05: "ACPI firmware table debugging with DMAR and IVRS"
+  Expected: [4644, 4643]
+  Found in top 10: [4644, 4643]  (2/2 = 100.0%)
+  First expected at rank: 1  (RR = 1.000)
+  Score range: 0.65 - 0.70
+
+Query q06: "deploying a CUDA-accelerated SageMath MCP server with Podman"
+  Expected: [4703, 4702, 4708]
+  Found in top 5: []  (0/3 = 0.0%)
+  First expected at rank: not found  (RR = 0.000)
+  Score range: 0.64 - 0.67
+
+Query q07: "rhgit monolith refactoring to service-oriented architecture"
+  Expected: [4608, 4604, 4605, 4586]
+  Found in top 5: [4608, 4604, 4605]  (3/4 = 75.0%)
+  First expected at rank: 1  (RR = 1.000)
+  Score range: 0.71 - 0.81
+
+Query q08: "unified pip-installable package for kernel development tools"
+  Expected: [4649, 4650, 4648]
+  Found in top 5: [4649, 4650, 4648]  (3/3 = 100.0%)
+  First expected at rank: 1  (RR = 1.000)
+  Score range: 0.66 - 0.82
+
+Query q09: "ServiceAdapter dependency injection pattern across tools"
+  Expected: [4497, 4486, 4498]
+  Found in top 5: []  (0/3 = 0.0%)
+  First expected at rank: not found  (RR = 0.000)
+  Score range: 0.66 - 0.69
+
+Query q10: "test driven development methodology with comprehensive test suites"
+  Expected: [4816, 4830, 4822]
+  Found in top 5: [4816]  (1/3 = 33.3%)
+  First expected at rank: 1  (RR = 1.000)
+  Score range: 0.71 - 0.73
+
+Query q11: "debugging NaN values and floating point precision issues in tests"
+  Expected: [4831, 4838]
+  Found in top 5: [4838]  (1/2 = 50.0%)
+  First expected at rank: 3  (RR = 0.333)
+  Score range: 0.71 - 0.74
+
+Query q12: "systematic root cause analysis for failing test suites"
+  Expected: [4843, 4844, 4823]
+  Found in top 5: []  (0/3 = 0.0%)
+  First expected at rank: not found  (RR = 0.000)
+  Score range: 0.73 - 0.77
+
+Query q13: "subtle bug in proxy pattern causing test environment failures"
+  Expected: [4784, 4825]
+  Found in top 10: [4784]  (1/2 = 50.0%)
+  First expected at rank: 1  (RR = 1.000)
+  Score range: 0.73 - 0.77
+
+Query q14: "security review and vulnerability assessment of refactored code"
+  Expected: [4602, 4603, 4758, 4759]
+  Found in top 5: [4602]  (1/4 = 25.0%)
+  First expected at rank: 1  (RR = 1.000)
+  Score range: 0.73 - 0.76
+
+Query q15: "BatchExecutor orchestration engine design and implementation"
+  Expected: [4830, 4831]
+  Found in top 5: []  (0/2 = 0.0%)
+  First expected at rank: 9  (RR = 0.111)
+  Score range: 0.63 - 0.68
+
+Query q16: "human-AI collaboration and intelligence augmentation philosophy"
+  Expected: [4697, 4698, 4701]
+  Found in top 5: [4697]  (1/3 = 33.3%)
+  First expected at rank: 1  (RR = 1.000)
+  Score range: 0.70 - 0.77
+
+Query q17: "hierarchical reasoning model with human oversight of AI agents"
+  Expected: [4696, 4701]
+  Found in top 10: [4696]  (1/2 = 50.0%)
+  First expected at rank: 3  (RR = 0.333)
+  Score range: 0.71 - 0.79
+
+Query q18: "frustration with delivering code that has compilation errors"
+  Expected: [4778, 4792]
+  Found in top 5: [4778]  (1/2 = 50.0%)
+  First expected at rank: 1  (RR = 1.000)
+  Score range: 0.70 - 0.75
+
+Query q19: "blocking commits that don't meet quality standards in code review"
+  Expected: [4794, 4777]
+  Found in top 5: [4777]  (1/2 = 50.0%)
+  First expected at rank: 3  (RR = 0.333)
+  Score range: 0.75 - 0.79
+
+Query q20: "satisfaction and pride after completing a major refactoring project"
+  Expected: [3650, 3651, 4234]
+  Found in top 10: []  (0/3 = 0.0%)
+  First expected at rank: not found  (RR = 0.000)
+  Score range: 0.68 - 0.71
+
+=== Summary ===
+  Recall@3: 0.28
+  Recall@5: 0.32
+  MRR: 0.48
+  Score distribution: min=0.63, max=0.82, mean=0.72
+  Queries evaluated: 20
