@@ -9,6 +9,7 @@ import { buildDistillationPrompt, stripCodeFences, DistillationEntry } from './p
 
 interface EmbeddingService {
   generateDocumentEmbedding(text: string): Promise<number[]>;
+  getModelInfo(): { name: string; dimensions: number };
 }
 
 export class DistillationService {
@@ -177,7 +178,7 @@ export class DistillationService {
       const searchableText = `${result.title} ${result.summary} ${result.keyInsights.join(' ')}`;
       const embedding = await this.embedding.generateDocumentEmbedding(searchableText);
 
-      if (embedding.length === 768) {
+      if (embedding.length === this.embedding.getModelInfo().dimensions) {
         const client = await this.pool.connect();
         try {
           // Find the distillation ID for this entry
