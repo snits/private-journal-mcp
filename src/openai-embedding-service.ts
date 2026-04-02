@@ -85,7 +85,7 @@ export class OpenAIEmbeddingService {
       const maxChars = this.modelConfig.maxInputChars;
       const truncatedText = text.length > maxChars ? text.substring(0, maxChars) : text;
 
-      const embeddings = await this.client.generateEmbedding([truncatedText], this.modelName);
+      const embeddings = await this.client.generateEmbedding([truncatedText], this.modelName, this.dimensions);
 
       if (!embeddings || embeddings.length === 0) {
         throw new Error('API returned no embeddings');
@@ -130,7 +130,7 @@ export class OpenAIEmbeddingService {
       // If batch is small enough, send it all at once
       const totalChars = truncatedTexts.reduce((sum, text) => sum + text.length, 0);
       if (totalChars <= maxBatchChars) {
-        return await this.client.generateEmbedding(truncatedTexts, this.modelName);
+        return await this.client.generateEmbedding(truncatedTexts, this.modelName, this.dimensions);
       }
 
       // Split into smaller sub-batches
@@ -166,7 +166,7 @@ export class OpenAIEmbeddingService {
       for (let i = 0; i < subBatches.length; i++) {
         const subBatch = subBatches[i];
         console.error(`  Batch ${i + 1}/${subBatches.length}: ${subBatch.length} texts`);
-        const embeddings = await this.client.generateEmbedding(subBatch, this.modelName);
+        const embeddings = await this.client.generateEmbedding(subBatch, this.modelName, this.dimensions);
         allEmbeddings.push(...embeddings);
       }
 
