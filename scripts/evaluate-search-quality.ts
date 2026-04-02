@@ -41,7 +41,7 @@ interface QueryResult {
 
 // --- Column whitelist ---
 
-const ALLOWED_COLUMNS = ['embedding', 'embedding_qwen3'];
+const ALLOWED_COLUMNS = ['embedding'];
 
 function validateColumn(column: string): void {
   if (!ALLOWED_COLUMNS.includes(column)) {

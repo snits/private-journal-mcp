@@ -142,3 +142,21 @@ If Qwen3 doesn't improve search quality:
 ## Total Effort
 
 ~3-4 days of development plus the re-embedding batch window (30-60 min on RTX 5070 Ti).
+
+## Results
+
+### Step 5: A/B Evaluation
+
+| Metric | nomic-embed-text | qwen3-embedding:4b | Change |
+|--------|-----------------|---------------------|--------|
+| Recall@3 | 0.28 | 0.40 | +43% |
+| Recall@5 | 0.32 | 0.58 | +81% |
+| MRR | 0.48 | 0.62 | +29% |
+
+Similarity threshold calibrated to **0.40** (down from initial estimate of 0.55).
+
+Note: The nomic comparison was disadvantaged by 8,437 ghost entries with NULL `searchable_text` competing in its search results. These entries had nomic embeddings generated from raw journal content before `searchable_text` was introduced, but lacked the structured text field used for search ranking.
+
+### Step 6: Cutover
+
+Migration `005-cutover-qwen3-embeddings.sql` drops the nomic embedding column and renames `embedding_qwen3` to `embedding`. The 8,437 ghost entries lose their vector data; 1,213 entries with qwen3 embeddings and populated `searchable_text` remain searchable.
