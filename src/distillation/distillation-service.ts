@@ -16,13 +16,11 @@ export class DistillationService {
   private pool: Pool;
   private textGen: TextGenerationClient;
   private embedding: EmbeddingService;
-  private model: string;
 
   constructor(pool: Pool, textGen: TextGenerationClient, embedding: EmbeddingService) {
     this.pool = pool;
     this.textGen = textGen;
     this.embedding = embedding;
-    this.model = process.env.TEXT_GEN_MODEL || 'llama3.1:8b';
   }
 
   async distillEntries(options: DistillationOptions): Promise<DistillationSummary> {
@@ -114,7 +112,7 @@ export class DistillationService {
     };
 
     const prompt = buildDistillationPrompt(promptEntry);
-    const raw = await this.textGen.generate(prompt);
+    const raw = await this.textGen.generate(prompt, { responseFormat: { type: "json_object" } });
     const cleaned = stripCodeFences(raw.trim());
     const parsed = JSON.parse(cleaned);
 
@@ -152,7 +150,7 @@ export class DistillationService {
         `INSERT INTO ai_memory.distillations (title, summary, key_insights, category, model)
          VALUES ($1, $2, $3, $4, $5)
          RETURNING id`,
-        [result.title, result.summary, result.keyInsights, result.category, this.model],
+        [result.title, result.summary, result.keyInsights, result.category, this.textGen.getModel()],
       );
 
       const distillationId = insertResult.rows[0].id;

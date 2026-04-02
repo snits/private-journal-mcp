@@ -138,9 +138,9 @@ Add three new environment variables for text generation (alongside existing
 `OPENAI_EMBEDDING_*` variables for embeddings):
 
 ```
-TEXT_GEN_BASE_URL=http://localhost:11434/v1    # OpenAI-compatible chat completions endpoint
-TEXT_GEN_MODEL=llama3.1:8b                     # Model name for distillation
-TEXT_GEN_API_KEY=                               # API key (optional for local models)
+OPENAI_CHAT_BASE_URL=http://localhost:11434/v1  # OpenAI-compatible chat completions endpoint
+OPENAI_CHAT_MODEL=qwen3.5:32k                  # Model name for distillation
+OPENAI_API_KEY=                                 # API key (optional for local models)
 ```
 
 These follow the same pattern as the embedding config: any OpenAI-compatible endpoint
@@ -157,10 +157,10 @@ completions API (`POST /chat/completions`) instead of the embeddings API.
 
 ```typescript
 interface TextGenerationConfig {
-    baseUrl: string;     // from TEXT_GEN_BASE_URL
-    model: string;       // from TEXT_GEN_MODEL
-    apiKey?: string;     // from TEXT_GEN_API_KEY
-    timeout?: number;    // default: 60000ms (longer than embedding — LLM generation is slower)
+    baseUrl: string;     // from OPENAI_CHAT_BASE_URL
+    model: string;       // from OPENAI_CHAT_MODEL
+    apiKey?: string;     // from OPENAI_API_KEY
+    timeout?: number;    // default: 120000ms (longer than embedding — LLM generation is slower)
 }
 
 interface TextGenerationClient {

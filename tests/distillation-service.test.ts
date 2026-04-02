@@ -18,6 +18,7 @@ describe('DistillationService', () => {
     };
     mockTextGen = {
       generate: vi.fn(),
+      getModel: vi.fn().mockReturnValue('qwen3.5:32k'),
     };
     mockEmbedding = {
       generateDocumentEmbedding: vi.fn().mockResolvedValue(new Array(768).fill(0.1)),
