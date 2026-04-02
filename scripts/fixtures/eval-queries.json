@@ -1,0 +1,37 @@
+{
+  "queries": [
+    {
+      "id": "q1",
+      "query": "PostgreSQL migration challenges and infrastructure setup",
+      "description": "Should find entries about Sprint 4.1 PostgreSQL migration blocking issues",
+      "expected_entry_ids": [4860, 4859],
+      "expected_file_paths": [
+        "user/2025-08-08/15-10-19-982740.md",
+        "project/2025-08-08/15-10-19-982118.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q2",
+      "query": "debugging test failures root cause analysis",
+      "description": "Should find entries about quality analytics test debugging",
+      "expected_entry_ids": [4844, 4843],
+      "expected_file_paths": [
+        "user/2025-08-08/13-12-43-271938.md",
+        "user/2025-08-08/13-00-52-694147.md"
+      ],
+      "must_be_in_top_k": 5
+    },
+    {
+      "id": "q3",
+      "query": "embedding model integration and semantic search",
+      "description": "Should find entries about embedding implementation for the journal",
+      "expected_entry_ids": [4852, 4848],
+      "expected_file_paths": [
+        "user/2025-08-08/13-58-45-854811.md",
+        "user/2025-08-08/13-47-48-547609.md"
+      ],
+      "must_be_in_top_k": 5
+    }
+  ]
+}
