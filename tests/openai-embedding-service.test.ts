@@ -163,6 +163,56 @@ describe('OpenAIEmbeddingService truncation uses maxInputChars from config', () 
   });
 });
 
+describe('OpenAIEmbeddingService batch splitting', () => {
+  let service: OpenAIEmbeddingService;
+  let mockClientGenerateEmbedding: ReturnType<typeof vi.fn>;
+
+  beforeEach(async () => {
+    vi.resetModules();
+
+    // Each call returns a distinct embedding so we can verify ordering
+    mockClientGenerateEmbedding = vi.fn()
+      .mockResolvedValueOnce([new Array(768).fill(0.1)])
+      .mockResolvedValueOnce([new Array(768).fill(0.2)])
+      .mockResolvedValueOnce([new Array(768).fill(0.3)]);
+
+    vi.doMock('../src/openai-client', () => ({
+      OpenAIClient: vi.fn().mockImplementation(() => ({
+        generateEmbedding: mockClientGenerateEmbedding,
+      })),
+    }));
+
+    // nomic: maxInputChars=6000, so maxBatchChars = Math.floor(6000 * 0.8) = 4800
+    const mod = await import('../src/openai-embedding-service');
+    service = mod.OpenAIEmbeddingService.getInstance();
+  });
+
+  test('splits texts into sub-batches when total chars exceed maxBatchChars', async () => {
+    // 3 texts of 2500 chars each (total 7500).
+    // maxBatchChars is 4800, so each 2500-char text starts a new sub-batch
+    // (2500 fits alone, but 2500+2500=5000 > 4800), yielding 3 sub-batches of 1 text each.
+    const textA = 'a'.repeat(2500);
+    const textB = 'b'.repeat(2500);
+    const textC = 'c'.repeat(2500);
+
+    const results = await service.generateBatch([textA, textB, textC]);
+
+    // API called once per sub-batch
+    expect(mockClientGenerateEmbedding).toHaveBeenCalledTimes(3);
+
+    // Each sub-batch contains exactly one text
+    expect(mockClientGenerateEmbedding.mock.calls[0][0]).toEqual([textA]);
+    expect(mockClientGenerateEmbedding.mock.calls[1][0]).toEqual([textB]);
+    expect(mockClientGenerateEmbedding.mock.calls[2][0]).toEqual([textC]);
+
+    // Results combined in order: [0.1-filled, 0.2-filled, 0.3-filled]
+    expect(results).toHaveLength(3);
+    expect(results[0][0]).toBeCloseTo(0.1);
+    expect(results[1][0]).toBeCloseTo(0.2);
+    expect(results[2][0]).toBeCloseTo(0.3);
+  });
+});
+
 describe('OpenAIEmbeddingService truncation with qwen3 (16000 chars)', () => {
   let service: OpenAIEmbeddingService;
   let mockClientGenerateEmbedding: ReturnType<typeof vi.fn>;
