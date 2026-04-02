@@ -108,6 +108,27 @@ describe('getModelConfig', () => {
     expect(config.model).toBe('nomic-embed-text');
   });
 
+  test('strips :latest suffix to match preset', () => {
+    const config = getModelConfig('nomic-embed-text:latest');
+
+    expect(config.model).toBe('nomic-embed-text');
+    expect(config.dimensions).toBe(768);
+    expect(config.documentPrefix).toBe('search_document: ');
+  });
+
+  test('does not strip non-latest tags from model name', () => {
+    const stderrSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const config = getModelConfig('nomic-embed-text:v1.5');
+
+    expect(config.model).toBe('nomic-embed-text:v1.5');
+    expect(stderrSpy).toHaveBeenCalledWith(
+      expect.stringContaining('Unknown embedding model "nomic-embed-text:v1.5"')
+    );
+
+    stderrSpy.mockRestore();
+  });
+
   test('MODEL_CONFIGS contains both known presets', () => {
     expect(Object.keys(MODEL_CONFIGS)).toContain('nomic-embed-text');
     expect(Object.keys(MODEL_CONFIGS)).toContain('qwen3-embedding:4b');

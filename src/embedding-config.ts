@@ -44,6 +44,15 @@ export function getModelConfig(modelName?: string): EmbeddingModelConfig {
     return preset;
   }
 
+  // Ollama appends ':latest' as the default tag — try without it
+  if (resolvedName.endsWith(':latest')) {
+    const baseName = resolvedName.slice(0, -':latest'.length);
+    const basePreset = MODEL_CONFIGS[baseName];
+    if (basePreset) {
+      return basePreset;
+    }
+  }
+
   // Unknown model — warn and return generic fallback
   console.error(
     `Warning: Unknown embedding model "${resolvedName}". Using generic fallback config.`
