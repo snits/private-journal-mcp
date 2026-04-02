@@ -6,6 +6,29 @@ import { OpenAIClient } from '../src/openai-client';
 import { getModelConfig } from '../src/embedding-config';
 import { createDatabaseConfig } from '../src/database-config';
 
+// --- Searchable text extraction (canonical logic from OpenAIEmbeddingService) ---
+
+function extractSearchableText(content: string): { text: string; sections: string[] } {
+  const withoutFrontmatter = content.replace(/^---[\s\S]*?---\n/, '');
+
+  const sections: string[] = [];
+  const headerRegex = /^## (.+)$/gm;
+  let match;
+  while ((match = headerRegex.exec(withoutFrontmatter)) !== null) {
+    sections.push(match[1].trim());
+  }
+
+  const text = withoutFrontmatter
+    .replace(/^#+\s+/gm, '')
+    .replace(/\*\*(.*?)\*\*/g, '$1')
+    .replace(/\*(.*?)\*/g, '$1')
+    .replace(/`(.*?)`/g, '$1')
+    .replace(/\n+/g, ' ')
+    .trim();
+
+  return { text, sections };
+}
+
 // --- CLI argument parsing ---
 
 interface CliArgs {
@@ -93,46 +116,103 @@ async function ensureQwen3Column(db: Client, dimensions: number): Promise<void> 
   console.log('Column embedding_qwen3 ready');
 }
 
+// --- Backfill searchable_text ---
+
+async function backfillSearchableText(db: Client): Promise<number> {
+  const BATCH_SIZE = 100;
+  let totalProcessed = 0;
+
+  while (true) {
+    const batchRes = await db.query(
+      `SELECT id, content FROM ai_memory.journal_entries
+       WHERE searchable_text IS NULL AND content IS NOT NULL AND LENGTH(content) > 0
+       ORDER BY id
+       LIMIT $1`,
+      [BATCH_SIZE]
+    );
+
+    if (batchRes.rows.length === 0) break;
+
+    await db.query('BEGIN');
+    try {
+      for (const row of batchRes.rows) {
+        const { text, sections } = extractSearchableText(row.content);
+        // Empty string sentinel means "processed, genuinely empty"
+        await db.query(
+          `UPDATE ai_memory.journal_entries
+           SET searchable_text = $1, sections = $2
+           WHERE id = $3`,
+          [text, JSON.stringify(sections), row.id]
+        );
+      }
+      await db.query('COMMIT');
+    } catch (err) {
+      await db.query('ROLLBACK');
+      throw err;
+    }
+
+    totalProcessed += batchRes.rows.length;
+
+    if (totalProcessed % 1000 < BATCH_SIZE) {
+      console.log(`  Backfill progress: ${totalProcessed} entries processed`);
+    }
+  }
+
+  console.log(`Backfill complete: ${totalProcessed} entries processed`);
+  return totalProcessed;
+}
+
 // --- Count work ---
 
 interface WorkCounts {
   totalWithText: number;
+  emptyEntries: number;
   needsEmbedding: number;
   alreadyDone: number;
-  ghostEntries: number;
+  unprocessed: number;
 }
 
 async function countWork(db: Client): Promise<WorkCounts> {
   const totalRes = await db.query(
-    `SELECT COUNT(*) FROM ai_memory.journal_entries WHERE searchable_text IS NOT NULL`
+    `SELECT COUNT(*) FROM ai_memory.journal_entries
+     WHERE searchable_text IS NOT NULL AND LENGTH(searchable_text) > 0`
   );
   const totalWithText = parseInt(totalRes.rows[0].count, 10);
 
+  const emptyRes = await db.query(
+    `SELECT COUNT(*) FROM ai_memory.journal_entries
+     WHERE searchable_text IS NOT NULL AND LENGTH(searchable_text) = 0`
+  );
+  const emptyEntries = parseInt(emptyRes.rows[0].count, 10);
+
   const needsRes = await db.query(
     `SELECT COUNT(*) FROM ai_memory.journal_entries
-     WHERE searchable_text IS NOT NULL AND embedding_qwen3 IS NULL`
+     WHERE searchable_text IS NOT NULL AND LENGTH(searchable_text) > 0
+       AND embedding_qwen3 IS NULL`
   );
   const needsEmbedding = parseInt(needsRes.rows[0].count, 10);
 
-  const ghostRes = await db.query(
+  const unprocessedRes = await db.query(
     `SELECT COUNT(*) FROM ai_memory.journal_entries WHERE searchable_text IS NULL`
   );
-  const ghostEntries = parseInt(ghostRes.rows[0].count, 10);
+  const unprocessed = parseInt(unprocessedRes.rows[0].count, 10);
 
   return {
     totalWithText,
+    emptyEntries,
     needsEmbedding,
     alreadyDone: totalWithText - needsEmbedding,
-    ghostEntries,
+    unprocessed,
   };
 }
 
 function printCounts(counts: WorkCounts): void {
   console.log(`\nWork summary:`);
-  console.log(`  Total entries with searchable_text: ${counts.totalWithText}`);
-  console.log(`  Already embedded (qwen3):           ${counts.alreadyDone}`);
-  console.log(`  Needs embedding:                    ${counts.needsEmbedding}`);
-  console.log(`  Ghost entries (NULL text, skipped):  ${counts.ghostEntries}`);
+  console.log(`  Entries with searchable content:    ${counts.totalWithText.toLocaleString()}`);
+  console.log(`  Empty entries (frontmatter only):   ${counts.emptyEntries.toLocaleString()}`);
+  console.log(`  Unprocessed (NULL searchable_text): ${counts.unprocessed.toLocaleString()}`);
+  console.log(`  Already embedded (qwen3):           ${counts.alreadyDone.toLocaleString()}`);
+  console.log(`  Needs embedding:                    ${counts.needsEmbedding.toLocaleString()}`);
 }
 
 // --- Batch re-embedding ---
@@ -154,7 +234,8 @@ async function reembedBatches(
     // Fetch next batch of entries needing embedding
     const batchRes = await db.query(
       `SELECT id, searchable_text FROM ai_memory.journal_entries
-       WHERE searchable_text IS NOT NULL AND embedding_qwen3 IS NULL
+       WHERE searchable_text IS NOT NULL AND LENGTH(searchable_text) > 0
+         AND embedding_qwen3 IS NULL
        ORDER BY id
        LIMIT $1`,
       [batchSize]
@@ -221,7 +302,8 @@ async function reembedBatches(
       const rate = totalProcessed / elapsed;
       const remaining = await db.query(
         `SELECT COUNT(*) FROM ai_memory.journal_entries
-         WHERE searchable_text IS NOT NULL AND embedding_qwen3 IS NULL`
+         WHERE searchable_text IS NOT NULL AND LENGTH(searchable_text) > 0
+           AND embedding_qwen3 IS NULL`
       );
       const remainingCount = parseInt(remaining.rows[0].count, 10);
       const etaSeconds = rate > 0 ? remainingCount / rate : 0;
@@ -264,7 +346,7 @@ async function main(): Promise<void> {
     concurrency: 1,
   });
 
-  // Pre-flight: verify the model produces correctly dimensioned vectors
+  // 1. Pre-flight: verify the model produces correctly dimensioned vectors
   await preflightCheck(embeddingClient, modelConfig.model, modelConfig.dimensions);
 
   // Connect to database with a single Client (not Pool) for session-level trigger control
@@ -280,39 +362,58 @@ async function main(): Promise<void> {
   await db.connect();
 
   try {
+    // 2. Ensure qwen3 column exists (DDL, always runs)
     await ensureQwen3Column(db, modelConfig.dimensions);
+
+    // 3. Count work and print summary (read-only, always runs)
     const counts = await countWork(db);
     printCounts(counts);
 
+    // 4. Dry-run gate: exit before any data modifications
     if (args.dryRun) {
       console.log('\n--dry-run specified, exiting without changes.');
       return;
     }
 
-    if (counts.needsEmbedding === 0) {
-      console.log('\nAll entries already have qwen3 embeddings. Nothing to do.');
-    } else {
-      // Disable audit triggers for the duration of the re-embedding
-      console.log('\nDisabling triggers on journal_entries...');
-      await db.query('ALTER TABLE ai_memory.journal_entries DISABLE TRIGGER ALL');
+    // 5. Disable triggers for backfill and re-embedding (data repair operations)
+    console.log('\nDisabling triggers on journal_entries...');
+    await db.query('ALTER TABLE ai_memory.journal_entries DISABLE TRIGGER ALL');
 
-      try {
-        await reembedBatches(
-          db,
-          embeddingClient,
-          modelConfig.model,
-          modelConfig.dimensions,
-          modelConfig.documentPrefix,
-          modelConfig.maxInputChars,
-          args.batchSize
-        );
-      } finally {
-        console.log('Re-enabling triggers on journal_entries...');
-        await db.query('ALTER TABLE ai_memory.journal_entries ENABLE TRIGGER ALL');
+    try {
+      // 6. Backfill searchable_text for historical entries
+      console.log('\nBackfilling searchable_text from content...');
+      const backfilled = await backfillSearchableText(db);
+
+      // 7. Re-count after backfill (counts changed if entries were processed)
+      if (backfilled > 0) {
+        const updatedCounts = await countWork(db);
+        printCounts(updatedCounts);
+
+        if (updatedCounts.needsEmbedding === 0) {
+          console.log('\nAll entries already have qwen3 embeddings. Nothing to do.');
+          return;
+        }
+      } else if (counts.needsEmbedding === 0) {
+        console.log('\nAll entries already have qwen3 embeddings. Nothing to do.');
+        return;
       }
+
+      // 8. Re-embed entries
+      await reembedBatches(
+        db,
+        embeddingClient,
+        modelConfig.model,
+        modelConfig.dimensions,
+        modelConfig.documentPrefix,
+        modelConfig.maxInputChars,
+        args.batchSize
+      );
+    } finally {
+      console.log('Re-enabling triggers on journal_entries...');
+      await db.query('ALTER TABLE ai_memory.journal_entries ENABLE TRIGGER ALL');
     }
 
-    // Build HNSW index (outside trigger block, no surrounding transaction)
+    // 9. Build HNSW index (outside trigger block, no surrounding transaction)
     await buildHnswIndex(db);
   } finally {
     await db.end();
